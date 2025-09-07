@@ -42,6 +42,23 @@ train:
   cudagraphs: false                        # Enable CUDA graphs
 ```
 
+### GRAM Loss Configuration
+```yaml
+gram:
+  use_loss: true                          # Enable GRAM loss training
+  teacher_momentum: 0.999                 # Teacher EMA momentum (default: 0.999)
+  warmup_teacher_temp: 0.04              # Initial teacher temperature (default: 0.04)
+  teacher_temp: 0.05                      # Final teacher temperature (default: 0.05)
+  warmup_teacher_temp_epochs: 30         # Epochs for teacher temperature warmup
+```
+
+**GRAM Loss Details:**
+- **use_loss**: Enables gradient-based regularization with auxiliary teacher model
+- **teacher_momentum**: EMA momentum for teacher model updates (higher = slower updates)
+- **warmup_teacher_temp**: Starting temperature for teacher softmax (lower = sharper)
+- **teacher_temp**: Final temperature after warmup period
+- **warmup_teacher_temp_epochs**: Number of epochs for temperature scheduling
+
 #### Dataset Path Formats
 
 **HuggingFace Datasets:**

@@ -67,7 +67,7 @@ train:
   data_config: null
   output_dir: .
   saveckp_freq: 20
-  seed: 42  # Match v1
+  seed: 42  # Match v1nn
   num_workers: 8  # Reduced for stability
   OFFICIAL_EPOCH_LENGTH: 600
   monitor_gradient_norm: false
@@ -94,7 +94,7 @@ student:
   proj_bias: true
   ffn_bias: true
   norm_layer: "layernorm"
-  n_storage_tokens: 4
+  n_storage_tokens: 0
   mask_k_bias: true
   untie_cls_and_patch_norms: false  # If true, use separate norms for CLS/reg and patch/mask tokens
   untie_global_and_local_cls_norm: false  # If true, use separate norms for local and global crop CLS token during training

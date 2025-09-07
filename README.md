@@ -7,14 +7,18 @@
 
 A PyTorch Lightning implementation of DINOv3 self-supervised learning, providing an easy-to-use, scalable, and well-documented framework for training DINOv3 models on custom datasets.
 
+> **Built upon the original [DINOv3](https://github.com/facebookresearch/dinov3) by Meta AI Research** - This implementation extends the original Facebook Research DINOv3 with PyTorch Lightning integration, GRAM loss support, and enhanced training capabilities while maintaining full compatibility with official pretrained weights.
+
 ## 🚀 Features
 
 - **PyTorch Lightning Integration**: Clean, modular code with automatic multi-GPU support
+- **GRAM Loss Support**: Gradient-based Regularization with Auxiliary Model for enhanced training
 - **Hybrid DataLoader System**: Optimized data loading for different sampling strategies
 - **Multiple Dataset Support**: Custom TIFF datasets, HuggingFace datasets, and standard vision datasets  
 - **Flexible Sampling**: Infinite, distributed, epoch-based, and sharded-infinite samplers
-- **Advanced Progress Tracking**: Real-time loss monitoring with rich progress bars
+- **Advanced Progress Tracking**: Real-time loss monitoring with rich progress bars including GRAM loss
 - **Multi-GPU Training**: DDP support with automatic gradient synchronization
+- **Robust Checkpoint Loading**: Compatible with both DINOv3 pretrained weights and training checkpoints
 - **Comprehensive Logging**: TensorBoard, CSV, and WandB integration
 - **Easy Configuration**: YAML-based config system with sensible defaults
 
@@ -48,11 +52,11 @@ python src/training/train_dinov3_lightning.py \
     --gpus 1 \
     --sampler-type infinite
 
-# Multi-GPU training
+# Multi-GPU training with GRAM loss
 python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
+    --config-file configs/config_lightning_finetuning_v2.yaml \
     --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
-    --output-dir ./output_multigpu \
+    --output-dir ./output_multigpu_gram \
     --gpus 4 \
     --strategy ddp \
     --sampler-type distributed \
@@ -140,6 +144,87 @@ optim:
   weight_decay: 0.02             # Weight decay
 ```
 
+## 🧠 GRAM Loss (Gradient-based Regularization with Auxiliary Model)
+
+### What is GRAM Loss?
+
+GRAM Loss is an advanced regularization technique that uses an auxiliary teacher model to provide gradient-based guidance during training. This enhances the learning process by leveraging pre-trained knowledge while allowing the student model to adapt to new domains.
+
+### Key Benefits
+
+- **Enhanced Training Stability**: Gradient regularization improves convergence
+- **Knowledge Transfer**: Leverages pretrained DINOv3 teacher for better representations
+- **Domain Adaptation**: Maintains general features while learning domain-specific patterns
+- **Real-time Monitoring**: GRAM loss is displayed in progress bars across all training regimes
+
+### Enabling GRAM Loss
+
+**1. Configuration Setup**
+
+Use the GRAM-enabled configuration file:
+
+```bash
+# configs/config_lightning_finetuning_v2.yaml
+gram:
+  use_loss: true              # Enable GRAM loss
+  teacher_momentum: 0.999     # Teacher EMA momentum
+  warmup_teacher_temp: 0.04   # Teacher temperature warmup
+  teacher_temp: 0.05          # Final teacher temperature
+  warmup_teacher_temp_epochs: 30
+
+# Architecture requirements (must match pretrained checkpoints)
+student:
+  mask_k_bias: true           # Required for DINOv3 pretrained weights
+  n_storage_tokens: 4         # Storage tokens for teacher model
+```
+
+**2. Training with GRAM**
+
+```bash
+# Single GPU with GRAM
+python src/training/train_dinov3_lightning.py \
+    --config-file configs/config_lightning_finetuning_v2.yaml \
+    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+    --output-dir ./output_gram \
+    --gpus 1
+
+# Multi-GPU with GRAM
+python src/training/train_dinov3_lightning.py \
+    --config-file configs/config_lightning_finetuning_v2.yaml \
+    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+    --output-dir ./output_multigpu_gram \
+    --gpus 4 \
+    --strategy ddp \
+    --sampler-type distributed
+```
+
+**3. Progress Monitoring**
+
+GRAM loss is automatically displayed in all training regimes:
+
+```
+Epoch 1/100 | Step 384/832 (46.2%) | ETA: 2.1h | Speed: 5.72 it/s
+DINO_L: 9.000 | DINO_G: 9.000 | KOLEO: -0.274 | IBOT: 2.254 | GRAM: 0.845 | total_loss: 12.095
+```
+
+### Architecture Compatibility
+
+**Important**: GRAM functionality requires specific architecture settings to match DINOv3 pretrained checkpoints:
+
+- `mask_k_bias: true` - Creates LinearKMaskedBias layers (required for pretrained weights)
+- `n_storage_tokens: 4` - Storage tokens for teacher model (matches official checkpoints)
+
+These settings ensure seamless loading of official DINOv3 pretrained weights as teacher models.
+
+### Checkpoint Loading
+
+The framework automatically handles both types of checkpoints:
+
+| Checkpoint Type | Content | GRAM Usage |
+|----------------|---------|------------|
+| **Pretrained (.pth)** | Model weights only | ✅ Loaded as teacher |
+| **Training (.ckpt)** | Full training state | ✅ Continues GRAM training |
+
 ## 🔧 Advanced Usage
 
 ### Custom Training Script
@@ -193,7 +278,7 @@ The framework provides detailed real-time progress information:
 
 ```
 Epoch 1/100 | Step 384/832 (46.2%) | ETA: 2.1h | Speed: 5.72 it/s | Elapsed: 1:10
-DINO_L: 9.000 | DINO_G: 9.000 | KOLEO: -0.274 | IBOT: 2.254 | total_loss: 11.250
+DINO_L: 9.000 | DINO_G: 9.000 | KOLEO: -0.274 | IBOT: 2.254 | GRAM: 0.845 | total_loss: 12.095
 ```
 
 ### Logging Options
@@ -229,6 +314,20 @@ batch_size_per_gpu: 4  # Instead of 8
 - Reduce `num_workers` if CPU limited
 - Check dataset path accessibility
 - Verify sufficient disk space
+
+**GRAM Loss Issues**
+```bash
+# Error: "Unexpected key(s) in state_dict: bias_mask"
+# Fix: Enable mask_k_bias in config
+mask_k_bias: true  # In student section
+
+# Error: "Unexpected key(s) in state_dict: storage_tokens"  
+# Fix: Set storage tokens to match pretrained checkpoint
+n_storage_tokens: 4  # In student section
+
+# GRAM loss not showing in progress bar
+# Check: Ensure using config_lightning_finetuning_v2.yaml with gram.use_loss: true
+```
 
 ## 🛠️ Setup
 
