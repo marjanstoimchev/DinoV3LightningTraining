@@ -43,12 +43,12 @@ ibot:
   head_nlayers: 3
   head_hidden_dim: 2048
 gram:
-  use_loss: false # (bool) if true gram is used, else not
+  use_loss: true # (bool) if true gram is used, else not
   compute_stats: false # (bool): if true compute auxilliary stats
   loss_weight: 1.0 # (float): weight of the loss
   ema_teacher: false # (bool): using the EMA teacher as GRAM teacher
-  ckpt: null  #(str): Checkpoint to the teacher
-  it_load_ema_teacher: -1 # (int): iteration at which the ema teacher is loaded into the gram teacher
+  ckpt: dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth  # Use same pretrained checkpoint
+  it_load_ema_teacher: 0 # (int): iteration at which the ema teacher is loaded into the gram teacher
   rep_update: true # (bool): if true GRAM teacher updated every gram.update_frequency after iter gram.it_first_update steps
   update_frequency: 50000 # (int): update frequency
   it_first_update: 0 # (int): iteration of the first update
@@ -95,7 +95,7 @@ student:
   ffn_bias: true
   norm_layer: "layernorm"
   n_storage_tokens: 0
-  mask_k_bias: false
+  mask_k_bias: true
   untie_cls_and_patch_norms: false  # If true, use separate norms for CLS/reg and patch/mask tokens
   untie_global_and_local_cls_norm: false  # If true, use separate norms for local and global crop CLS token during training
   in_chans: 3
@@ -156,7 +156,7 @@ crops:
   global_crops_size: 224  # Smaller for efficiency
   local_crops_size: 96  # Smaller for efficiency
   global_local_crop_pairs_ratios: 1.0
-  gram_teacher_crops_size: null  # If not None, return crops for gram teacher
+  gram_teacher_crops_size: 224  # If not None, return crops for gram teacher
   localcrops_subset_of_globalcrops: false
   share_color_jitter: false
   horizontal_flips: true

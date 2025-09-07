@@ -184,6 +184,11 @@ class DINOv3BaseProgressBar(RichProgressBar):
             else:
                 loss_parts.append(f"[#7209B7]iBOT: ---.----[/#7209B7]")
             
+            # Add GRAM loss support
+            if 'train/gram_loss' in logged_metrics:
+                gram = float(logged_metrics['train/gram_loss'])
+                loss_parts.append(f"[#00A8CC]GRAM: {gram:.4f}[/#00A8CC]")
+            
             # Return all main losses (consistent display)
             return " | ".join(loss_parts)
             

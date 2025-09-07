@@ -188,6 +188,8 @@ class DINOv3EnhancedProgressBar(RichProgressBar):
                         main_losses.append(f"KOLEO:{losses['koleo_loss']:.4f}")
                     if 'ibot_loss' in losses:
                         main_losses.append(f"IBOT:{losses['ibot_loss']:.4f}")
+                    if 'gram_loss' in losses:
+                        main_losses.append(f"GRAM:{losses['gram_loss']:.4f}")
                     
                     if main_losses:
                         loss_info = f" | {' '.join(main_losses)}"
