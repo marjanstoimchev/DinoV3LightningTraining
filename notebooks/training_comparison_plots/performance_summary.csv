@@ -1,0 +1,2 @@
+Configuration,Final Total Loss,Min Total Loss,Final Global Loss,Final Local Loss,Final iBOT Loss,Training Steps,Final LR
+finetuning_v1,6.6406,6.4375,5.3555,5.4609,1.2310,120000,1.01e-11

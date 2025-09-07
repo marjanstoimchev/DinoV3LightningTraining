@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# PyTorch Lightning logs
+lightning_logs/
+mlruns/
+.neptune/
+
+# Outputs
+output*/
+checkpoints/
+logs/
+*.log
+*.ckpt
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+
+# Model checkpoints (large files)
+*.pth
+!dinov3/dinov3/checkpoints/*.pth
+
+# Data
+Datasets/
+*.tiff
+*.tif
+*.png
+*.jpg
+*.jpeg
+
+# Analysis results  
+feature_analysis_results/
+plots/
+*.png
+!doc/*.png
+
+
+dinov3/checkpoints/
+*.ckpt
+*.pth
