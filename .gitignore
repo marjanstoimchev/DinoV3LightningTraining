@@ -69,4 +69,4 @@ plots/
 
 dinov3/checkpoints/
 *.ckpt
-*.pth
+*.pthdinov3/
