@@ -1,0 +1,3 @@
+[submodule "dinov3"]
+	path = dinov3
+	url = https://github.com/marjanstoimchev/dinov3.git
