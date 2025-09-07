@@ -24,7 +24,7 @@ SEED=42
 PRECISION="bf16-mixed"           # Training precision: 32, 16, bf16-mixed, 16-mixed
 MAX_EPOCHS=100                   # Number of training epochs
 STRATEGY="ddp"                   # Training strategy: auto, ddp, ddp_sharded
-BATCH_SIZE=128                    # Total effective batch size across all GPUs
+BATCH_SIZE=32                    # Total effective batch size across all GPUs
 SAMPLER_TYPE="infinite"             # Sampler type: infinite, distributed, sharded_infinite
 LEARNING_RATE=0.0001            # Learning rate for optimizer
 # DATASET_PATH="CustomTIFF:root=../Datasets/composite/"  # Dataset path and format
