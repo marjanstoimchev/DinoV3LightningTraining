@@ -25,16 +25,16 @@ A PyTorch Lightning implementation of DINOv3 self-supervised learning, providing
 Create and activate the conda environment:
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>
-cd DinoV3Lightning_modified
+# Clone the repository with submodules
+git clone --recurse-submodules https://github.com/marjanstoimchev/DinoV3LightningTraining.git
+cd DinoV3LightningTraining
 
 # Create conda environment 
 conda env create -f environment.yml
 conda activate dinov3_lightning
 
-# Initialize DINOv3 submodule
-git submodule update --init --recursive
+# If you didn't use --recurse-submodules, initialize submodule:
+# git submodule update --init --recursive
 ```
 
 ### 2. Basic Training
@@ -273,20 +273,23 @@ python plot_training_losses.py    # Loss visualizations
 tensorboard --logdir=output_multi_gpu/tensorboard_logs
 ```
 
-### Feature Analysis
+### Analysis Notebooks
 ```bash
-# For custom datasets
-jupyter notebook notebooks/feature_extraction_custom_dataset.ipynb
+# Unified feature extraction and analysis
+jupyter notebook notebooks/feature_extraction_unified.ipynb
 
-# For HuggingFace datasets  
-jupyter notebook notebooks/feature_extraction_huggingface_dataset.ipynb
+# Training configuration comparison
+jupyter notebook notebooks/compare_training_configs.ipynb
+
+# Image retrieval and similarity analysis
+jupyter notebook notebooks/image_retrieval.ipynb
 ```
 **Features:**
-- Compare original vs fine-tuned model features  
-- PCA, t-SNE, UMAP visualizations with label-based coloring
-- Statistical analysis and correlations
-- CLS token and patch-level feature extraction
-- Automatic dataset exploration and class separation analysis
+- **Feature Extraction**: Compare original vs fine-tuned model features
+- **Visualizations**: PCA, t-SNE, UMAP with comprehensive plotting
+- **Training Analysis**: Compare different training configurations
+- **Image Retrieval**: Similarity search and nearest neighbor analysis
+- **Statistical Analysis**: Feature distributions, correlations, and metrics
 
 ## 📁 Output Structure
 
@@ -414,7 +417,7 @@ python extract_ssl_model.py --checkpoint path/to/checkpoint.ckpt --info-only
 - [Configuration Reference](docs/CONFIG.md) - Detailed config options  
 - [Usage Examples](docs/EXAMPLES.md) - Comprehensive training examples
 - [API Documentation](docs/API.md) - Code API reference
-- [Jupyter Notebooks](notebooks/) - Analysis and visualization examples
+- [Analysis Notebooks](notebooks/) - Feature extraction, training comparison, and image retrieval
 
 ## 🤝 Contributing
 
