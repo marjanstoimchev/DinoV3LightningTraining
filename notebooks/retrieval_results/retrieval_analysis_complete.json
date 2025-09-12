@@ -1,0 +1,49 @@
+{
+  "metadata": {
+    "experiment_timestamp": "2025-09-08T14:56:17.846715",
+    "dataset_type": "huggingface",
+    "dataset_name": "jonathancui/oxford-pets",
+    "similarity_metric": "cosine",
+    "models_evaluated": [
+      "original",
+      "finetuned"
+    ],
+    "k_values": [
+      1,
+      5,
+      10,
+      20
+    ]
+  },
+  "configuration": {
+    "num_query_samples": 100,
+    "num_gallery_samples": 500,
+    "batch_size": 32,
+    "random_seed": 42,
+    "feature_normalization": true,
+    "stratified_sampling": true
+  },
+  "dataset_info": {
+    "total_classes": 37,
+    "query_classes": 35,
+    "gallery_classes": 37,
+    "query_samples": 100,
+    "gallery_samples": 500
+  },
+  "results": {
+    "original": {
+      "Top-1_Accuracy": 0.86,
+      "Top-5_Accuracy": 0.98,
+      "Top-10_Accuracy": 0.99,
+      "Top-20_Accuracy": 0.99,
+      "mAP": 0.6792543576545423
+    },
+    "finetuned": {
+      "Top-1_Accuracy": 0.85,
+      "Top-5_Accuracy": 0.98,
+      "Top-10_Accuracy": 0.99,
+      "Top-20_Accuracy": 1.0,
+      "mAP": 0.6471759616898727
+    }
+  }
+}

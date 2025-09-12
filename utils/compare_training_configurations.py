@@ -69,6 +69,7 @@ class ConfigurationComparator:
             'train/dino_local_crops_loss': '#A23B72', 
             'train/ibot_loss': '#7209B7',
             'train/koleo_loss': '#C73E1D',
+            'train/gram_loss': '#06A77D',
             'train/lr': '#FF6B6B'
         }
         
@@ -232,6 +233,97 @@ class ConfigurationComparator:
         print(f"iBOT and Koleo comparison saved: {output_file}")
         plt.show()
     
+    def compare_gram_loss(self) -> None:
+        """Compare GRAM loss across configurations"""
+        if not self.data:
+            return
+            
+        # Check if any configuration has GRAM loss data
+        has_gram = any('train/gram_loss' in df.columns for df in self.data.values())
+        
+        if not has_gram:
+            print("⚠️  No GRAM loss data found in any configuration")
+            return
+            
+        plt.figure(figsize=(12, 8))
+        
+        for i, (config_name, df) in enumerate(self.data.items()):
+            if 'train/gram_loss' in df.columns:
+                loss_data = df['train/gram_loss'].dropna()
+                steps = loss_data.index
+                
+                plt.plot(steps, loss_data.values,
+                        color=self._get_color(i, 'train/gram_loss'),
+                        label=f'{config_name} (final: {loss_data.iloc[-1]:.3f})',
+                        linewidth=2.5, alpha=0.8)
+        
+        plt.title('GRAM Loss Comparison', fontsize=16, fontweight='bold')
+        plt.xlabel('Training Step', fontsize=12)
+        plt.ylabel('GRAM Loss', fontsize=12)
+        plt.legend(fontsize=10)
+        plt.grid(True, alpha=0.3)
+        
+        output_file = self.output_dir / "gram_loss_comparison.png"
+        plt.savefig(output_file, dpi=300, bbox_inches='tight', facecolor='white')
+        print(f"GRAM loss comparison saved: {output_file}")
+        plt.show()
+    
+    def compare_auxiliary_losses(self) -> None:
+        """Compare all auxiliary losses (iBOT, Koleo, GRAM) in a comprehensive view"""
+        if not self.data:
+            return
+            
+        # Check which auxiliary losses are available
+        has_ibot = any('train/ibot_loss' in df.columns for df in self.data.values())
+        has_koleo = any('train/koleo_loss' in df.columns for df in self.data.values())
+        has_gram = any('train/gram_loss' in df.columns for df in self.data.values())
+        
+        loss_types = []
+        if has_ibot:
+            loss_types.append(('train/ibot_loss', 'iBOT Loss'))
+        if has_koleo:
+            loss_types.append(('train/koleo_loss', 'Koleo Loss'))
+        if has_gram:
+            loss_types.append(('train/gram_loss', 'GRAM Loss'))
+            
+        if not loss_types:
+            print("⚠️  No auxiliary loss data found")
+            return
+            
+        n_plots = len(loss_types)
+        fig, axes = plt.subplots(1, n_plots, figsize=(6 * n_plots, 6))
+        
+        # Handle single subplot case
+        if n_plots == 1:
+            axes = [axes]
+            
+        for idx, (loss_key, loss_name) in enumerate(loss_types):
+            ax = axes[idx]
+            
+            for i, (config_name, df) in enumerate(self.data.items()):
+                if loss_key in df.columns:
+                    loss_data = df[loss_key].dropna()
+                    steps = loss_data.index
+                    
+                    ax.plot(steps, loss_data.values,
+                           color=self._get_color(i, loss_key),
+                           label=f'{config_name} (final: {loss_data.iloc[-1]:.3f})',
+                           linewidth=2.5, alpha=0.8)
+            
+            ax.set_title(f'{loss_name} Comparison', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Training Step')
+            ax.set_ylabel(loss_name)
+            ax.legend(fontsize=9)
+            ax.grid(True, alpha=0.3)
+        
+        plt.suptitle('Auxiliary Loss Components Comparison', fontsize=16, fontweight='bold', y=1.02)
+        plt.tight_layout()
+        
+        output_file = self.output_dir / "auxiliary_losses_comparison.png"
+        plt.savefig(output_file, dpi=300, bbox_inches='tight', facecolor='white')
+        print(f"Auxiliary losses comparison saved: {output_file}")
+        plt.show()
+    
     def compare_learning_rates(self) -> None:
         """Compare learning rate schedules"""
         if not self.data:
@@ -296,6 +388,11 @@ class ConfigurationComparator:
                 ibot_loss = df['train/ibot_loss'].dropna()
                 summary["Final iBOT Loss"] = f"{ibot_loss.iloc[-1]:.4f}"
             
+            # GRAM loss
+            if 'train/gram_loss' in df.columns:
+                gram_loss = df['train/gram_loss'].dropna()
+                summary["Final GRAM Loss"] = f"{gram_loss.iloc[-1]:.4f}"
+            
             # Training steps
             summary["Training Steps"] = len(df)
             
@@ -323,6 +420,8 @@ class ConfigurationComparator:
         self.compare_total_losses()
         self.compare_dino_losses() 
         self.compare_ibot_koleo_losses()
+        self.compare_gram_loss()
+        self.compare_auxiliary_losses()
         self.compare_learning_rates()
         self.generate_performance_summary()
         
