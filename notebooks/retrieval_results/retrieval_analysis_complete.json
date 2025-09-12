@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "experiment_timestamp": "2025-09-08T14:56:17.846715",
+    "experiment_timestamp": "2025-09-12T14:06:46.669940",
     "dataset_type": "huggingface",
     "dataset_name": "jonathancui/oxford-pets",
     "similarity_metric": "cosine",
