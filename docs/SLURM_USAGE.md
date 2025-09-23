@@ -61,6 +61,111 @@ tail -f logs/slurm-JOBID.out
 - Lightning uses `num_nodes` in the `Trainer` configuration
 - Enables batch normalization sync when `num_nodes > 1` or `gpus > 1`
 
+## Customizing the Training Script
+
+The `slurm_train.sh` script includes many configurable parameters. Edit these variables in the script to customize your training:
+
+### Core Training Parameters
+
+```bash
+# Model and data configuration
+CONFIG_FILE="configs/config_lightning_finetuning.yaml"
+CHECKPOINT_PATH="dinov3/dinov3/checkpoints/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+OUTPUT_DIR="./output_slurm_${SLURM_JOB_ID}"
+SEED=42
+
+# GPU and distributed training
+GPUS=4                          # Number of GPUs to use
+STRATEGY="ddp"                  # Training strategy (auto, ddp, ddp_sharded, etc.)
+PRECISION="bf16-mixed"          # Training precision (32, 16, bf16-mixed, 16-mixed)
+
+# Training duration and batching
+MAX_EPOCHS=100                  # Maximum training epochs
+BATCH_SIZE=32                   # Total batch size across all GPUs
+ACCUMULATE_GRAD_BATCHES=1       # Gradient accumulation steps
+LIMIT_TRAIN_BATCHES=1.0         # Fraction of dataset to use (1.0 = full dataset)
+
+# Data loading and sampling
+SAMPLER_TYPE="infinite"         # Options: infinite, distributed, sharded_infinite, epoch
+
+# Checkpointing and logging
+SAVE_EVERY_N_STEPS=5000         # Save checkpoint every N steps
+PROGRESS_LOG_STEPS=50           # Log progress every N steps
+
+# Advanced options
+RESUME_FROM_CHECKPOINT=""       # Path to Lightning checkpoint to resume from
+COMPILE=false                   # Enable PyTorch 2.0 compilation
+```
+
+### Data Sampler Types
+
+Choose the appropriate sampler for your training:
+
+| Sampler Type | Use Case | Dataset Behavior | Progress Bar |
+|--------------|----------|------------------|--------------|
+| `infinite` | Standard DINOv3 training | Infinite sampling, no epochs | Enhanced with step estimates |
+| `distributed` | Multi-GPU with finite epochs | Distributed sampling across GPUs | Standard with epoch progress |
+| `sharded_infinite` | Large-scale infinite sampling | Sharded infinite sampling | Enhanced with step estimates |
+| `epoch` | Traditional epoch-based training | Standard epoch boundaries | Standard with epoch progress |
+
+### Performance Optimization Examples
+
+#### For Different GPU Configurations
+
+```bash
+# Single GPU setup
+GPUS=1
+STRATEGY="auto"
+BATCH_SIZE=8
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+
+# Dual GPU setup
+GPUS=2
+STRATEGY="ddp"
+BATCH_SIZE=16
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=16
+
+# High-end 8 GPU setup
+GPUS=8
+STRATEGY="ddp"
+BATCH_SIZE=64
+#SBATCH --gres=gpu:8
+#SBATCH --cpus-per-task=64
+```
+
+#### For Different Training Scenarios
+
+```bash
+# Quick testing/debugging
+MAX_EPOCHS=1
+LIMIT_TRAIN_BATCHES=0.1         # Use only 10% of dataset
+SAVE_EVERY_N_STEPS=100
+PROGRESS_LOG_STEPS=10
+
+# Long production training
+MAX_EPOCHS=200
+LIMIT_TRAIN_BATCHES=1.0
+SAVE_EVERY_N_STEPS=5000
+PROGRESS_LOG_STEPS=50
+
+# Memory-constrained training
+BATCH_SIZE=16
+ACCUMULATE_GRAD_BATCHES=2       # Effective batch size = 16 * 2 = 32
+PRECISION="16-mixed"            # Use 16-bit precision
+```
+
+#### Compilation and Performance
+
+```bash
+# Enable PyTorch 2.0 compilation for faster training
+COMPILE=true
+
+# Note: Compilation adds startup time but can significantly speed up training
+# Best for longer training runs (>1000 steps)
+```
+
 ## Customizing for Your Cluster
 
 ### 1. Check Available Resources
@@ -76,14 +181,14 @@ sinfo -o "%P %G %N" | grep gpu
 squeue -u $USER
 ```
 
-### 2. Adjust Resource Requests
+### 2. Adjust SLURM Resource Requests
 
-Edit `slurm_train.sh` based on your cluster:
+Edit the SLURM directives in `slurm_train.sh` based on your cluster:
 
 ```bash
-# For different GPU counts
+# For different GPU counts (must match GPUS variable)
 #SBATCH --gres=gpu:2        # For 2 GPUs
-#SBATCH --cpus-per-task=16  # Adjust CPUs accordingly
+#SBATCH --cpus-per-task=16  # Adjust CPUs accordingly (8 per GPU)
 # Then change: GPUS=2 in script
 
 # For different partitions
@@ -100,6 +205,9 @@ Edit `slurm_train.sh` based on your cluster:
 # Adjust based on your model and batch size
 #SBATCH --mem=32G          # For smaller models/batch sizes
 #SBATCH --mem=128G         # For larger models/batch sizes
+
+# Rule of thumb: 16GB per GPU minimum
+# For batch_size=32 with 4 GPUs: 64-128GB recommended
 ```
 
 ## Monitoring and Debugging
@@ -162,8 +270,15 @@ squeue -u $USER -l
 # Reduce batch size in script
 BATCH_SIZE=16  # Instead of 32
 
-# Use gradient accumulation
---accumulate-grad-batches 2
+# Use gradient accumulation to maintain effective batch size
+BATCH_SIZE=16
+ACCUMULATE_GRAD_BATCHES=2  # Effective batch size = 16 * 2 = 32
+
+# Use lower precision
+PRECISION="16-mixed"  # Instead of bf16-mixed
+
+# Reduce training data for testing
+LIMIT_TRAIN_BATCHES=0.5  # Use only 50% of dataset
 ```
 
 ### 3. GPU Allocation Mismatch
@@ -176,7 +291,32 @@ BATCH_SIZE=16  # Instead of 32
 GPUS=4                # Training script
 ```
 
-### 4. Node Communication Issues
+### 4. Compilation Issues
+
+**Problem**: PyTorch compilation fails or slows down training
+
+**Solutions**:
+```bash
+# Disable compilation for debugging
+COMPILE=false
+
+# Or use compilation only for longer runs
+# (compilation overhead is amortized over many steps)
+```
+
+### 5. Sampler-Related Issues
+
+**Problem**: Training hangs or progress bar behaves unexpectedly
+
+**Solutions**:
+```bash
+# Try different sampler types:
+SAMPLER_TYPE="epoch"        # For traditional epoch-based training
+SAMPLER_TYPE="distributed"  # For distributed finite-length training
+SAMPLER_TYPE="infinite"     # For DINOv3-style infinite sampling (default)
+```
+
+### 6. Node Communication Issues
 
 **Problem**: Multi-node training fails (if using multiple nodes)
 
@@ -294,10 +434,30 @@ watch -n 10 'squeue -u $USER'
 
 ### 3. Resume from Checkpoint
 
-Edit the script to resume from a specific checkpoint:
+The script now supports resuming from Lightning checkpoints. Edit the script to resume:
 
 ```bash
-CHECKPOINT_PATH="./output_slurm_12345/checkpoints/last.ckpt"
+# Resume from a specific Lightning checkpoint
+RESUME_FROM_CHECKPOINT="./output_slurm_12345/checkpoints/last.ckpt"
+
+# Or resume from a step-specific checkpoint
+RESUME_FROM_CHECKPOINT="./output_slurm_12345/checkpoints/model_epoch_05_step_010000_loss_0.234567.ckpt"
+```
+
+**Important**: This is different from the initial pretrained checkpoint:
+- `CHECKPOINT_PATH`: DINOv3 pretrained model (.pth file) - used for initialization
+- `RESUME_FROM_CHECKPOINT`: Lightning training checkpoint (.ckpt file) - used to resume training
+
+### 4. Fast Development and Testing
+
+```bash
+# Quick test with minimal resources
+#SBATCH --time=0:30:00
+#SBATCH --gres=gpu:1
+MAX_EPOCHS=1
+LIMIT_TRAIN_BATCHES=0.1
+BATCH_SIZE=8
+COMPILE=false
 ```
 
 ## Getting Help

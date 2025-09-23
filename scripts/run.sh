@@ -50,6 +50,9 @@ FAST_DEV_RUN=false             # Quick test run with minimal data
 LIMIT_TRAIN_BATCHES=1.0        # Limit training batches (1.0 = all, 0.1 = 10%)
 CUDA_LAUNCH_BLOCKING=0         # Set to 1 for debugging CUDA errors
 
+# Resume Training Options
+RESUME_FROM_CHECKPOINT=""      # Path to Lightning checkpoint to resume from (leave empty for fresh start)
+
 # ============================================================================
 # DERIVED CONFIGURATION - Automatically calculated
 # ============================================================================
@@ -130,6 +133,7 @@ echo "Development Options:"
 echo "  Fast dev run:      $FAST_DEV_RUN"
 echo "  Limit batches:     $LIMIT_TRAIN_BATCHES"
 echo "  CUDA blocking:     $CUDA_LAUNCH_BLOCKING"
+echo "  Resume from:       ${RESUME_FROM_CHECKPOINT:-'Fresh start'}"
 echo "  Seed:              $SEED"
 echo "=============================================="
 echo ""
@@ -214,6 +218,12 @@ fi
 if [[ "$COMPILE_ENABLED" == "true" ]]; then
     TRAINING_ARGS+=(--compile)
     echo "⚠️  PyTorch compilation enabled - first run will be slower due to compilation"
+fi
+
+# Add resume checkpoint if specified and exists
+if [ -n "$RESUME_FROM_CHECKPOINT" ] && [ -f "$RESUME_FROM_CHECKPOINT" ]; then
+    TRAINING_ARGS+=(--resume-from-checkpoint "$RESUME_FROM_CHECKPOINT")
+    echo "⚠️  Resuming from checkpoint: $RESUME_FROM_CHECKPOINT"
 fi
 
 # Execute training with appropriate launcher

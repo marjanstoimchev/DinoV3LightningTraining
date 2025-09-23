@@ -97,6 +97,7 @@ student:
   n_storage_tokens: 4
   mask_k_bias: true
   untie_cls_and_patch_norms: false  # If true, use separate norms for CLS/reg and patch/mask tokens
+  
   untie_global_and_local_cls_norm: false  # If true, use separate norms for local and global crop CLS token during training
   in_chans: 3
   pos_embed_type: rope
