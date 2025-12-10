@@ -25,6 +25,7 @@ from dinov3.data import (
 )
 from dinov3.train.ssl_meta_arch import SSLMetaArch
 from data.custom_dataset import CustomImageDataset
+from data.csv_dataset import CSVDataset
 
 
 class DINOv3DataModule(pl.LightningDataModule):
@@ -156,6 +157,47 @@ class DINOv3DataModule(pl.LightningDataModule):
                 streaming=streaming,
                 image_key=image_key,
                 label_key=label_key
+            )
+        elif self.dataset_path.endswith(".csv") or self.dataset_path.startswith("CSV:"):
+            # Handle CSV dataset - auto-detect .csv files or explicit CSV: prefix
+
+            # Parse CSV dataset parameters
+            if self.dataset_path.startswith("CSV:"):
+                # Parse format: CSV:path=/path/to/file.csv[:image_col=col_name][:label_col=col_name][:sep=,][:base_path=/path]
+                params = {}
+                parts = self.dataset_path.replace("CSV:", "").split(":")
+
+                for part in parts:
+                    if "=" in part:
+                        key, value = part.split("=", 1)
+                        params[key] = value
+
+                # Extract parameters
+                csv_path = params.get("path")
+                if not csv_path:
+                    raise ValueError("CSV dataset must specify 'path' parameter")
+
+                image_col = params.get("image_col", "image_path")
+                label_col = params.get("label_col", None)
+                separator = params.get("sep", ",")
+                base_path = params.get("base_path", None)
+            else:
+                # Auto-detected CSV file - use defaults
+                csv_path = self.dataset_path
+                image_col = "image_path"
+                label_col = None
+                separator = ","
+                base_path = None
+
+            self.train_dataset = CSVDataset(
+                csv_path=csv_path,
+                image_col=image_col,
+                label_col=label_col,
+                transform=transform,
+                target_transform=lambda _: (),
+                separator=separator,
+                skip_missing=True,
+                base_path=base_path
             )
         else:
             # Use DINOv3's make_dataset function for standard datasets

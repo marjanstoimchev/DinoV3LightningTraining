@@ -1,3 +1,0 @@
-Model,Top-1_Accuracy,Top-5_Accuracy,Top-10_Accuracy,Top-20_Accuracy,mAP
-Original,0.86,0.98,0.99,0.99,0.6792543576545423
-Finetuned,0.85,0.98,0.99,1.0,0.6471759616898727

@@ -11,25 +11,27 @@ set -e
 # ============================================================================
 
 # GPU Configuration
-CUDA_VISIBLE_DEVICES="0,1,2,4"  # Which physical GPUs to use
+CUDA_VISIBLE_DEVICES="1,2,5,6"  # Which physical GPUs to use
 GPUS=4                           # Number of GPUs (should match CUDA_VISIBLE_DEVICES count)
 
 # Training Configuration  
 CONFIG_FILE="configs/config_lightning_finetuning_v2.yaml"
 CHECKPOINT_PATH="dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
-OUTPUT_DIR="./output_hf"
+OUTPUT_DIR="./output"
 SEED=42
 
 # Model and Training Parameters
 PRECISION="bf16-mixed"           # Training precision: 32, 16, bf16-mixed, 16-mixed
-MAX_EPOCHS=100                   # Number of training epochs
+MAX_EPOCHS=300                   # Number of training epochs
 STRATEGY="ddp"                   # Training strategy: auto, ddp, ddp_sharded
-BATCH_SIZE=32                    # Total effective batch size across all GPUs
-SAMPLER_TYPE="infinite"             # Sampler type: infinite, distributed, sharded_infinite
+BATCH_SIZE=128                    # Total effective batch size across all GPUs
+SAMPLER_TYPE="distributed"             # Sampler type: infinite, distributed, sharded_infinite
 LEARNING_RATE=0.0001            # Learning rate for optimizer
-# DATASET_PATH="CustomTIFF:root=../Datasets/composite/"  # Dataset path and format
 
-DATASET_PATH="HuggingFace:name=jonathancui/oxford-pets"
+# DATASET_PATH="CustomTIFF:root=../Datasets/composite/"  # Dataset path and format
+# DATASET_PATH="HuggingFace:name=jonathancui/oxford-pets"
+
+DATASET_PATH='patches.csv'
 
 # Performance and System Configuration
 NUM_WORKERS=32                    # Number of data loading workers per GPU
@@ -164,8 +166,9 @@ TEMP_CONFIG_FILE="${OUTPUT_DIR}/temp_config.yaml"
 mkdir -p "$(dirname "$TEMP_CONFIG_FILE")"
 
 echo "Modifying config with runtime parameters..."
-echo "  Learning rate: $LEARNING_RATE"
-echo "  Dataset path:  $DATASET_PATH"
+echo "  Learning rate:         $LEARNING_RATE"
+echo "  Dataset path:          $DATASET_PATH"
+echo "  Batch size per GPU:    $PER_GPU_BATCH_SIZE"
 
 # Copy original config and modify learning rate and dataset path
 cp "$CONFIG_FILE" "$TEMP_CONFIG_FILE"
@@ -175,6 +178,9 @@ sed -i "s/lr: [0-9]*\.[0-9]*/lr: $LEARNING_RATE/g" "$TEMP_CONFIG_FILE"
 
 # Modify dataset path using sed (handle various formats)
 sed -i "s|dataset_path: .*|dataset_path: $DATASET_PATH|g" "$TEMP_CONFIG_FILE"
+
+# Modify batch_size_per_gpu using sed
+sed -i "s/batch_size_per_gpu: [0-9]*/batch_size_per_gpu: $PER_GPU_BATCH_SIZE/g" "$TEMP_CONFIG_FILE"
 
 # Update CONFIG_FILE to point to temporary config
 CONFIG_FILE="$TEMP_CONFIG_FILE"
