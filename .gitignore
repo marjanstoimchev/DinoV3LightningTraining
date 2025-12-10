@@ -21,6 +21,7 @@ checkpoints/
 logs/
 *.log
 *.ckpt
+*.csv
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -62,6 +63,7 @@ Datasets/
 
 # Analysis results  
 feature_analysis_results/
+attention_analysis_/*
 plots/
 *.png
 !doc/*.png
