@@ -90,7 +90,10 @@ GRAM_WEIGHT="${GRAM_WEIGHT:-}"
 # If CONTINUED_PRETRAINING is set, use the DINOv3 official weights
 if [[ -n "$CONTINUED_PRETRAINING" ]]; then
     PRETRAIN_CHECKPOINT="${PRETRAIN_CHECKPOINT:-dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth}"
-    OUTPUT_DIR="${OUTPUT_DIR:-prototype_analysis_dinov3_continued}"
+    # Override OUTPUT_DIR only if user didn't explicitly set it
+    if [[ "$OUTPUT_DIR" == "prototype_analysis_dinov3" ]]; then
+        OUTPUT_DIR="prototype_analysis_dinov3_continued"
+    fi
     echo "Continued pretraining enabled"
     echo "  Checkpoint: $PRETRAIN_CHECKPOINT"
 fi
