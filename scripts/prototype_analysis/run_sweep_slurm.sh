@@ -1,16 +1,15 @@
 #!/bin/bash
 
-#SBATCH --job-name=dinov3-proto-sweep
+#SBATCH --job-name=c-dtd-proto
 #SBATCH --output=logs/slurm-%j.out
 #SBATCH --error=logs/slurm-%j.err
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=3
-#SBATCH --cpus-per-task=16
-#SBATCH --nodelist=kt-gpu4
-#SBATCH --gres=gpu:3
+#SBATCH --ntasks-per-node=2
+#SBATCH --cpus-per-task=10
+#SBATCH --gres=gpu:2
 #SBATCH --time=24:00:00
 #SBATCH --mem=32G
-#SBATCH --partition=e8
+#SBATCH --partition=gpu
 
 # =============================================================================
 # DINOv3 Prototype Analysis Sweep - SLURM Script
@@ -66,7 +65,7 @@ echo ""
 # Configuration (override via environment variables)
 # =============================================================================
 DATASETS="${DATASETS:-dtd}"
-GPUS="${GPUS:-0,1,2}"
+GPUS="${GPUS:-0,1}"
 PROTOTYPES="${PROTOTYPES:-128 256 512 1024}"
 SEEDS="${SEEDS:-0 1 42}"
 PRETRAIN_SEED="${PRETRAIN_SEED:-42}"

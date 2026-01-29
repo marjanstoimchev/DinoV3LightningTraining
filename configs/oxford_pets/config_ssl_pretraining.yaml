@@ -77,7 +77,7 @@ train:
   saveckp_freq: 1000
   seed: 0
   num_workers: 10
-  OFFICIAL_EPOCH_LENGTH: 19  # ~7.3k images / (128 * 3 GPUs)
+  OFFICIAL_EPOCH_LENGTH: 29  # ~7.3k images / (128 * 2 GPUs)
   monitor_gradient_norm: false
   chunk_schedule: []
   use_teacher_head: true
