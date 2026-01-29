@@ -244,33 +244,31 @@ def create_callbacks(cfg: OmegaConf, output_dir: str, args):
     lr_monitor = LearningRateMonitor(logging_interval='step')
     callbacks.append(lr_monitor)
 
-    # Choose appropriate progress bar based on actual sampler type that will be used
-    import torch.distributed as dist
-    will_use_distributed = (args.sampler_type and args.sampler_type.lower() == "distributed" and
-                           dist.is_available() and dist.is_initialized())
-    will_use_epoch = (args.sampler_type and args.sampler_type.lower() == "epoch") or \
-                    (args.sampler_type and args.sampler_type.lower() == "distributed" and
-                     not (dist.is_available() and dist.is_initialized()))
-
-    if will_use_distributed or will_use_epoch:
-        # Use base progress bar for distributed and epoch samplers (finite length)
-        progress_bar = DINOv3BaseProgressBar(
-            refresh_rate=1,
-            leave=True,
-            log_every_n_steps=args.progress_log_every_n_steps
-        )
-        sampler_name = "distributed" if will_use_distributed else "epoch"
-        print(f"Using DINOv3BaseProgressBar for {sampler_name} sampler")
-    else:
-        # Use enhanced progress bar for infinite samplers (default)
-        progress_bar = DINOv3EnhancedProgressBar(
-            refresh_rate=1,
-            leave=True,
-            log_every_n_steps=args.progress_log_every_n_steps
-        )
-        print("Using DINOv3EnhancedProgressBar for infinite sampler")
-
-    callbacks.append(progress_bar)
+    # Custom progress bar disabled - using Lightning's native progress bar
+    # import torch.distributed as dist
+    # will_use_distributed = (args.sampler_type and args.sampler_type.lower() == "distributed" and
+    #                        dist.is_available() and dist.is_initialized())
+    # will_use_epoch = (args.sampler_type and args.sampler_type.lower() == "epoch") or \
+    #                 (args.sampler_type and args.sampler_type.lower() == "distributed" and
+    #                  not (dist.is_available() and dist.is_initialized()))
+    #
+    # if will_use_distributed or will_use_epoch:
+    #     progress_bar = DINOv3BaseProgressBar(
+    #         refresh_rate=1,
+    #         leave=True,
+    #         log_every_n_steps=args.progress_log_every_n_steps
+    #     )
+    #     sampler_name = "distributed" if will_use_distributed else "epoch"
+    #     print(f"Using DINOv3BaseProgressBar for {sampler_name} sampler")
+    # else:
+    #     progress_bar = DINOv3EnhancedProgressBar(
+    #         refresh_rate=1,
+    #         leave=True,
+    #         log_every_n_steps=args.progress_log_every_n_steps
+    #     )
+    #     print("Using DINOv3EnhancedProgressBar for infinite sampler")
+    #
+    # callbacks.append(progress_bar)
 
     return callbacks
 

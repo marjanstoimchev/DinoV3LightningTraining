@@ -424,17 +424,8 @@ results/
 
 ### Result Files
 
-**classification_results.csv** (per-run):
-| prototype | seed | accuracy | top5_accuracy | f1_macro | ... |
-|-----------|------|----------|---------------|----------|-----|
-| 128 | 0 | 0.85 | 0.97 | 0.84 | ... |
-| 128 | 1 | 0.84 | 0.96 | 0.83 | ... |
-
-**classification_stats.csv** (aggregated):
-| prototype | accuracy_mean | accuracy_std | accuracy_count | ... |
-|-----------|---------------|--------------|----------------|-----|
-| 128 | 0.847 | 0.012 | 3 | ... |
-| 256 | 0.863 | 0.008 | 3 | ... |
+- **classification_results.csv**: Per-run results with columns for prototype count, seed, accuracy, top5_accuracy, f1_macro, and other metrics
+- **classification_stats.csv**: Aggregated statistics with mean, std, and count across seeds for each prototype configuration
 
 ## Repository Structure
 

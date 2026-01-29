@@ -93,7 +93,7 @@ train:
   centering: "sinkhorn_knopp"
   checkpointing: false
   checkpointing_full: false
-  compile: true
+  compile: false
   cudagraphs: false
   sharded_eval_checkpoint: false
   cache_dataset: false
