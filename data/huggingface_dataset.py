@@ -155,14 +155,51 @@ class HuggingFaceDataset(Dataset):
                 else:
                     logger.warning(f"Label column '{label_key}' not found. Using dummy labels for self-supervised learning.")
                     self.label_key = None
-        
+
         # For streaming datasets, we can't get the length
         if not streaming:
             self.length = len(self.dataset)
             logger.info(f"Dataset size: {self.length:,} samples")
+            # Build label encoding for string labels
+            self._build_label_encoding()
         else:
             self.length = None
+            self.label_to_idx = {}
+            self.label_names = {}
             logger.info("Streaming dataset - length unknown")
+
+    def _build_label_encoding(self):
+        """Build label-to-index mapping for string labels."""
+        if self.label_key is None or self.label_key not in self.dataset.column_names:
+            self.label_to_idx = {}
+            self.label_names = {}
+            logger.info("No label column found, skipping label encoding")
+            return
+
+        # Sample a few examples to check label type
+        sample_label = self.dataset[0][self.label_key]
+
+        # If labels are already numeric, no encoding needed
+        if isinstance(sample_label, (int, np.integer)):
+            self.label_to_idx = {}
+            self.label_names = {}
+            logger.info("Labels are already numeric, no encoding needed")
+            return
+
+        # Build encoding for string labels
+        logger.info("Scanning dataset to build label encoding...")
+        unique_labels = set()
+        for item in self.dataset:
+            label_val = item[self.label_key]
+            if label_val is not None:
+                unique_labels.add(label_val)
+
+        # Create mappings
+        sorted_labels = sorted(unique_labels)
+        self.label_to_idx = {label: idx for idx, label in enumerate(sorted_labels)}
+        self.label_names = {idx: label for label, idx in self.label_to_idx.items()}
+
+        logger.info(f"Built label encoding with {len(self.label_to_idx)} classes: {sorted_labels}")
             
     def __len__(self) -> int:
         if self.length is not None:
@@ -216,6 +253,25 @@ class HuggingFaceDataset(Dataset):
                 target = sample[self.label_key]
                 if isinstance(target, (list, tuple)):
                     target = target[0]  # Take first label if multiple
+
+                # Handle string labels with encoding
+                if isinstance(target, str):
+                    if self.label_to_idx:
+                        # Use pre-built encoding
+                        target = self.label_to_idx.get(target, -1)
+                    else:
+                        # Build encoding dynamically for streaming mode
+                        if target not in self.label_to_idx:
+                            new_idx = len(self.label_to_idx)
+                            self.label_to_idx[target] = new_idx
+                            self.label_names[new_idx] = target
+                        target = self.label_to_idx[target]
+                else:
+                    # Already numeric - ensure it's a Python int
+                    if hasattr(target, 'item'):
+                        target = target.item()
+                    else:
+                        target = int(target)
             else:
                 # Use index as dummy target for self-supervised learning
                 target = idx

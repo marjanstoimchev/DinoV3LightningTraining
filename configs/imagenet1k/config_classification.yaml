@@ -1,0 +1,136 @@
+# ImageNet1K Classification Configuration
+# Configuration for downstream classification task
+
+MODEL:
+  META_ARCHITECTURE: SSLMetaArch
+  DEVICE: cuda
+  WEIGHTS: ''
+  DTYPE: float32
+
+compute_precision:
+  param_dtype: bf16
+  reduce_dtype: fp32
+  sharding_strategy: SHARD_GRAD_OP
+
+train:
+  batch_size_per_gpu: 128
+  dataset_path: HuggingFace:name=ILSVRC/imagenet-1k
+  data_config: null
+  output_dir: .
+  saveckp_freq: 5
+  seed: 42
+  num_workers: 8
+  OFFICIAL_EPOCH_LENGTH: 3336  # ~1.28M images / (128 * 3 GPUs)
+  monitor_gradient_norm: false
+  chunk_schedule: []
+  use_teacher_head: true
+  learn_from_teacher_tokens: false
+  centering: "sinkhorn_knopp"
+  checkpointing: false
+  checkpointing_full: false
+  compile: false
+  cudagraphs: false
+  sharded_eval_checkpoint: false
+  cache_dataset: false
+
+student:
+  arch: vit_small
+  patch_size: 16
+  drop_path_rate: 0.1
+  layerscale: 1.0e-05
+  pretrained_weights: '../checkpoints/pretraining/'  # Path to pretrained model
+  ffn_layer: "mlp"
+  ffn_ratio: 4.0
+  resume_from_teacher_chkpt: ""
+  qkv_bias: true
+  proj_bias: true
+  ffn_bias: true
+  norm_layer: "layernorm"
+  n_storage_tokens: 0
+  mask_k_bias: false
+  untie_cls_and_patch_norms: false
+  untie_global_and_local_cls_norm: false
+  in_chans: 3
+  pos_embed_type: rope
+  pos_embed_rope_base: 100.0
+  pos_embed_rope_min_period: null
+  pos_embed_rope_max_period: null
+  pos_embed_rope_normalize_coords: separate
+  pos_embed_rope_shift_coords: null
+  pos_embed_rope_jitter_coords: null
+  pos_embed_rope_rescale_coords: null
+  pos_embed_rope_dtype: bf16
+  fp8_enabled: False
+  fp8_filter: "blocks"
+
+optim:
+  epochs: 30
+  optimizer: adamw
+  weight_decay: 0.02
+  weight_decay_end: 0.1
+  lr: 0.0001
+  warmup_epochs: 2
+  min_lr: 1.0e-07
+  schedule_trunc_extra: 0.0
+  clip_grad: 3.0
+  freeze_last_layer_epochs: 3
+  scaling_rule: sqrt_wrt_1024
+  patch_embed_lr_mult: 0.1
+  dino_head_wd_multiplier: 1.0
+  layerwise_decay: 0.95
+  multi_tensor_optim: true
+  dump_fsdp_weights_path: ""
+  adamw_beta1: 0.9
+  adamw_beta2: 0.999
+
+crops:
+  global_crops_scale:
+  - 0.5
+  - 1.0
+  local_crops_number: 6
+  local_crops_scale:
+  - 0.1
+  - 0.5
+  global_crops_size: 256
+  local_crops_size: 112
+  global_local_crop_pairs_ratios: 1.0
+  gram_teacher_crops_size: 256
+  localcrops_subset_of_globalcrops: false
+  share_color_jitter: false
+  horizontal_flips: true
+  gram_teacher_no_distortions: false
+  rgb_mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  rgb_std:
+  - 0.229
+  - 0.224
+  - 0.225
+
+evaluation:
+  eval_period_iterations: 500
+  low_freq_every: 2
+  config_files:
+    high_freq: benchmark_high_frequency.yaml
+    low_freq: benchmark_low_frequency.yaml
+
+checkpointing:
+  period: 1000
+  max_to_keep: 3
+  max_eval_to_keep: 5
+  keep_every: 99999999999999999
+
+early_stopping:
+  enabled: true
+  monitor: "val_loss"
+  patience: 10
+  mode: "min"
+
+# Lightning-specific settings
+lightning:
+  precision: bf16-mixed
+  gpus: 1
+  strategy: auto
+  log_every_n_steps: 10
+  save_every_n_epochs: 5

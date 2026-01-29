@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PyTorch Lightning adaptation of DINOv3 fine-tuning
-Exact replica of dinov3/dinov3/train functionality but using Lightning framework
+PyTorch Lightning module for DINOv3 SSL pretraining.
+Exact replica of dinov3/dinov3/train functionality but using Lightning framework.
 """
 
 import os
@@ -27,18 +27,18 @@ from dinov3.checkpointer import init_fsdp_model_from_checkpoint
 from dinov3.data import DataAugmentationDINO
 from dinov3.logging import MetricLogger
 
-logger = logging.getLogger("dinov3_lightning")
+logger = logging.getLogger("ssl_learner")
 
 
-class DINOv3LightningModule(pl.LightningModule):
+class SSLLearner(pl.LightningModule):
     """
-    PyTorch Lightning module wrapping DINOv3 SSL training
-    Maintains exact same functionality as original DINOv3 training
+    PyTorch Lightning module wrapping DINOv3 SSL training.
+    Maintains exact same functionality as original DINOv3 training.
     """
-    
+
     def __init__(self, cfg_path: str, checkpoint_path: Optional[str] = None):
         super().__init__()
-        
+
         # Load configuration
         if isinstance(cfg_path, str):
             self.cfg = OmegaConf.load(cfg_path)
@@ -47,34 +47,34 @@ class DINOv3LightningModule(pl.LightningModule):
             self.cfg = OmegaConf.merge(default_cfg, self.cfg)
         else:
             self.cfg = cfg_path
-            
+
         # Store paths
         self.checkpoint_path = checkpoint_path
-        
+
         # Initialize model components
         self._build_model()
-        
+
         # Learning rate schedules
         self.lr_schedules = None
         self.current_iteration = 0
-        
+
         # Save hyperparameters
         self.save_hyperparameters(ignore=['cfg'])
-        
+
         # Manual optimization for exact DINOv3 behavior
         self.automatic_optimization = False
-        
+
     def _build_model(self):
         """Build the DINOv3 SSL model architecture"""
         logger.info("Building DINOv3 SSL model...")
-        
+
         # Create model with meta device first (like original)
         with torch.device("meta"):
             self.ssl_model = SSLMetaArch(self.cfg)
-            
+
         # Distributed training setup will be handled in setup() method
         # when Lightning has initialized the distributed environment
-        
+
         # Initialize with NaN values (like original)
         self.ssl_model._apply(
             lambda t: torch.full_like(
@@ -84,23 +84,32 @@ class DINOv3LightningModule(pl.LightningModule):
             ),
             recurse=True,
         )
-        
+
         logger.info(f"Model built: {self.ssl_model}")
-        
+
     def setup(self, stage: str):
         """Setup model weights and schedules"""
         if stage == "fit":
             # Lightning handles distributed training automatically
             logger.info(f"Training setup (world_size: {self.trainer.world_size})")
-            
+
             # Initialize weights
             self.ssl_model.init_weights()
-            
+
+            # Determine checkpoint to load (priority: constructor arg > config)
+            checkpoint_to_load = self.checkpoint_path
+            if not checkpoint_to_load:
+                # Check config for pretrained weights (for continued pretraining)
+                pretrained_weights = getattr(self.cfg.student, 'pretrained_weights', '')
+                if pretrained_weights and os.path.exists(pretrained_weights):
+                    checkpoint_to_load = pretrained_weights
+                    logger.info(f"Using pretrained weights from config: {pretrained_weights}")
+
             # Load checkpoint if provided
-            if self.checkpoint_path:
-                logger.info(f"Loading checkpoint from {self.checkpoint_path}")
-                checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
-                
+            if checkpoint_to_load:
+                logger.info(f"Loading checkpoint from {checkpoint_to_load}")
+                checkpoint = torch.load(checkpoint_to_load, map_location='cpu')
+
                 if 'teacher' in checkpoint:
                     # This is a full SSL checkpoint with teacher/student structure
                     self.ssl_model.load_state_dict(checkpoint['teacher'], strict=True)
@@ -108,25 +117,23 @@ class DINOv3LightningModule(pl.LightningModule):
                     # This is a pretrained backbone checkpoint - map keys to student/teacher/ema
                     backbone_state = checkpoint
                     ssl_state = {}
-                    
+
                     # Map backbone weights to student, teacher, and model_ema
                     for key, value in backbone_state.items():
-                        # Skip storage_tokens as it's not in all model variants
-                        if key == 'storage_tokens':
-                            continue
-                            
                         ssl_state[f'student.backbone.{key}'] = value.clone()
-                        ssl_state[f'teacher.backbone.{key}'] = value.clone()  
+                        ssl_state[f'teacher.backbone.{key}'] = value.clone()
                         ssl_state[f'model_ema.backbone.{key}'] = value.clone()
-                    
-                    self.ssl_model.load_state_dict(ssl_state, strict=False)
-            
+
+                    # Load with strict=False to allow missing/extra keys
+                    msg = self.ssl_model.load_state_dict(ssl_state, strict=False)
+                    logger.info(f"Loaded pretrained backbone weights: {msg}")
+
             # Build learning rate schedules
             self._build_schedules()
-            
+
             # Apply torch.compile if enabled in config
             self._apply_compile()
-            
+
     def _build_schedules(self):
         """Build learning rate and other schedules (exact copy from original)"""
         if "schedules" in self.cfg:
@@ -177,9 +184,9 @@ class DINOv3LightningModule(pl.LightningModule):
                 teacher_temp_schedule,
                 last_layer_lr_schedule,
             )
-            
+
         logger.info("Schedules ready.")
-        
+
     def _build_schedules_v2(self):
         """Build schedules v2 (exact copy from original)"""
         iter_per_epoch = self.cfg.train.OFFICIAL_EPOCH_LENGTH
@@ -189,7 +196,7 @@ class DINOv3LightningModule(pl.LightningModule):
         # LR scaling rules
         lr_peak = self.cfg.schedules.lr.peak
         lr_end = self.cfg.schedules.lr.end
-        
+
         if self.cfg.optim.scaling_rule == "linear_wrt_256":
             world_size = self.trainer.world_size if hasattr(self.trainer, 'world_size') else 1
             lr_peak *= self.cfg.train.batch_size_per_gpu * world_size / 256.0
@@ -213,7 +220,7 @@ class DINOv3LightningModule(pl.LightningModule):
         )
         last_layer_lr = lr.copy()
         last_layer_lr[: iter_per_epoch * self.cfg.schedules.lr.freeze_last_layer_epochs] = 0
-        
+
         weight_decay = linear_warmup_cosine_decay(
             start=self.cfg.schedules.weight_decay.start,
             peak=self.cfg.schedules.weight_decay.peak,
@@ -226,7 +233,7 @@ class DINOv3LightningModule(pl.LightningModule):
                 else None
             ),
         )
-        
+
         momentum = linear_warmup_cosine_decay(
             start=self.cfg.schedules.momentum.start,
             peak=self.cfg.schedules.momentum.peak,
@@ -237,7 +244,7 @@ class DINOv3LightningModule(pl.LightningModule):
                 iter_per_epoch * self.cfg.schedules.momentum.cosine_epochs if "cosine_epochs" in self.cfg.schedules.momentum else None
             ),
         )
-        
+
         teacher_temp = linear_warmup_cosine_decay(
             start=self.cfg.schedules.teacher_temp.start,
             peak=self.cfg.schedules.teacher_temp.peak,
@@ -250,14 +257,14 @@ class DINOv3LightningModule(pl.LightningModule):
                 else None
             ),
         )
-        
+
         return lr, weight_decay, momentum, teacher_temp, last_layer_lr
 
     def _apply_compile(self):
         """Apply torch.compile to model components if enabled in config"""
         if hasattr(self.cfg.train, 'compile') and self.cfg.train.compile:
             logger.info("Applying torch.compile to model components...")
-            
+
             # Apply compile to specific model blocks (like original DINOv3)
             def compile_block(block: nn.Module, is_backbone_block: bool = True) -> nn.Module:
                 """Compile individual blocks based on configuration"""
@@ -266,8 +273,8 @@ class DINOv3LightningModule(pl.LightningModule):
                         # Use optimized compilation for CUDA
                         block = torch.compile(
                             block,
-                            fullgraph=True, 
-                            dynamic=False, 
+                            fullgraph=True,
+                            dynamic=False,
                             options={"triton.cudagraphs": True}
                         )
                     else:
@@ -278,8 +285,8 @@ class DINOv3LightningModule(pl.LightningModule):
                 except Exception as e:
                     logger.warning(f"Failed to compile block: {e}, continuing without compilation")
                     return block
-            
-            # Apply compile exactly like original DINOv3 
+
+            # Apply compile exactly like original DINOv3
             def wrap_compile_module(m: nn.Module, is_backbone: bool = True) -> nn.Module:
                 """Compile module exactly like original DINOv3"""
                 try:
@@ -291,17 +298,17 @@ class DINOv3LightningModule(pl.LightningModule):
                 except Exception as e:
                     logger.warning(f"Failed to compile module: {e}")
                     return m
-            
+
             # Compile student backbone (exact replica of original logic)
             if hasattr(self.ssl_model.student, 'backbone'):
                 self.ssl_model.student.backbone = wrap_compile_module(self.ssl_model.student.backbone, is_backbone=True)
                 logger.info("Successfully compiled student backbone")
-            
+
             # Compile teacher backbone
             if hasattr(self.ssl_model.teacher, 'backbone'):
-                self.ssl_model.teacher.backbone = wrap_compile_module(self.ssl_model.teacher.backbone, is_backbone=True)  
+                self.ssl_model.teacher.backbone = wrap_compile_module(self.ssl_model.teacher.backbone, is_backbone=True)
                 logger.info("Successfully compiled teacher backbone")
-            
+
             # Compile EMA backbone
             if hasattr(self.ssl_model.model_ema, 'backbone'):
                 try:
@@ -309,7 +316,7 @@ class DINOv3LightningModule(pl.LightningModule):
                     logger.info("Successfully compiled EMA backbone")
                 except Exception as e:
                     logger.warning(f"Failed to compile EMA backbone: {e}")
-            
+
             # Compile other components like loss functions if they exist
             if hasattr(self.ssl_model, 'ibot_loss') and hasattr(self.ssl_model.ibot_loss, 'sinkhorn_knopp_teacher'):
                 try:
@@ -319,7 +326,7 @@ class DINOv3LightningModule(pl.LightningModule):
                     logger.info("Successfully compiled iBOT sinkhorn_knopp_teacher")
                 except Exception as e:
                     logger.warning(f"Failed to compile sinkhorn_knopp_teacher: {e}")
-            
+
             logger.info("torch.compile application completed")
         else:
             logger.info("torch.compile disabled in config (train.compile: false)")
@@ -328,20 +335,20 @@ class DINOv3LightningModule(pl.LightningModule):
         """Configure optimizer exactly like original DINOv3"""
         params_groups = self.ssl_model.get_params_groups()
         optimizer = AdamW(
-            params_groups, 
+            params_groups,
             betas=(self.cfg.optim.adamw_beta1, self.cfg.optim.adamw_beta2)
         )
-        
+
         # Return optimizer without scheduler (we handle scheduling manually)
         return optimizer
 
     def training_step(self, batch, batch_idx):
         """Training step - exact replica of DINOv3 training loop"""
         optimizer = self.optimizers()
-        
+
         # Get current iteration
         it = self.current_iteration
-        
+
         # Apply learning rate schedules
         if self.lr_schedules is not None:
             if isinstance(self.lr_schedules[0], torch.Tensor):
@@ -360,24 +367,24 @@ class DINOv3LightningModule(pl.LightningModule):
                 mom_val = momentum_schedule[it]
                 teacher_temp_val = teacher_temp_schedule[it]
                 last_layer_lr_val = last_layer_lr_schedule[it]
-                
+
             self._apply_optim_scheduler(optimizer, lr_val, wd_val, last_layer_lr_val)
         else:
             # Default values
             teacher_temp_val = self.cfg.teacher.teacher_temp
             mom_val = self.cfg.teacher.momentum_teacher
-        
+
         # Add global batch size to batch data
         batch["global_batch_size"] = self.cfg.train.batch_size_per_gpu * self.trainer.world_size
-        
+
         # Forward and backward pass
         optimizer.zero_grad(set_to_none=True)
         total_loss, metrics_dict = self.ssl_model.forward_backward(
-            batch, 
-            teacher_temp=teacher_temp_val, 
+            batch,
+            teacher_temp=teacher_temp_val,
             iteration=it
         )
-        
+
         # Gradient clipping (if enabled)
         if self.cfg.optim.clip_grad:
             for k, v in self.ssl_model.student.items():
@@ -386,21 +393,21 @@ class DINOv3LightningModule(pl.LightningModule):
                     max_norm=self.cfg.optim.clip_grad,
                 )
                 metrics_dict[f"{k}_grad_norm"] = grad_norm.item()
-        
+
         # Optimizer step
         optimizer.step()
-        
+
         # Update EMA
         self.ssl_model.update_ema(mom_val)
-        
+
         # Handle GRAM updates if needed
         if (
             hasattr(self.ssl_model, 'gram_use_loss') and self.ssl_model.gram_use_loss
             and hasattr(self.ssl_model, 'gram_rep_update') and self.ssl_model.gram_rep_update
             and (it + 1) >= self.ssl_model.gram_it_first_update
             and (it + 1) % self.ssl_model.gram_update_frequency == 0
-            and (not hasattr(self.ssl_model.cfg.gram, 'max_updates') or 
-                 self.ssl_model.cfg.gram.max_updates is None or 
+            and (not hasattr(self.ssl_model.cfg.gram, 'max_updates') or
+                 self.ssl_model.cfg.gram.max_updates is None or
                  self.ssl_model.num_gram_updates < self.ssl_model.cfg.gram.max_updates)
         ):
             logger.info(f"Updating Gram teacher from EMA teacher after iteration {it}")
@@ -408,17 +415,17 @@ class DINOv3LightningModule(pl.LightningModule):
             if not hasattr(self.ssl_model, 'num_gram_updates'):
                 self.ssl_model.num_gram_updates = 0
             self.ssl_model.num_gram_updates += 1
-        
+
         # Log metrics with detailed individual losses
         self.log("total_loss", total_loss, prog_bar=True, sync_dist=True)
-        
+
         # Log individual losses prominently
         loss_components = {}
         for key, value in metrics_dict.items():
             if isinstance(value, torch.Tensor):
                 val = value.item() if value.numel() == 1 else value.mean()
                 self.log(f"train/{key}", val, sync_dist=True)
-                
+
                 # Track individual loss components for progress bar
                 if "loss" in key.lower():
                     loss_components[key] = val
@@ -426,25 +433,25 @@ class DINOv3LightningModule(pl.LightningModule):
                 self.log(f"train/{key}", value, sync_dist=True)
                 if "loss" in key.lower():
                     loss_components[key] = value
-        
+
         # Store loss components for progress bar display
         if hasattr(self, 'current_loss_components'):
             self.current_loss_components.update(loss_components)
         else:
             self.current_loss_components = loss_components
-        
+
         # Log learning rates
         if self.lr_schedules is not None:
             self.log("train/lr", lr_val, sync_dist=True)
             self.log("train/wd", wd_val, sync_dist=True)
             self.log("train/momentum", mom_val, sync_dist=True)
             self.log("train/teacher_temp", teacher_temp_val, sync_dist=True)
-        
+
         # Increment iteration counter
         self.current_iteration += 1
-        
+
         return total_loss
-    
+
     def _apply_optim_scheduler(self, optimizer, lr, wd, last_layer_lr):
         """Apply learning rate and weight decay schedules (exact copy from original)"""
         for param_group in optimizer.param_groups:
@@ -462,16 +469,20 @@ class DINOv3LightningModule(pl.LightningModule):
         # Force garbage collection (like in original)
         import gc
         gc.collect()
-        
+
     def forward(self, x):
         """Forward pass - not used during training but required for Lightning"""
         # This is primarily used during inference
         return self.ssl_model.teacher.backbone(x, is_training=False)
-        
+
     def get_model_for_checkpoint(self):
         """Get the model state dict for checkpointing"""
         return self.ssl_model.state_dict()
-        
+
     def load_from_checkpoint_dict(self, checkpoint_dict):
         """Load model from checkpoint dictionary"""
-        self.ssl_model.load_state_dict(checkpoint_dict, strict=False)
+        self.ssl_model.load_state_dict(checkpoint_dict, strict=True)
+
+
+# Backward compatibility alias
+DINOv3LightningModule = SSLLearner

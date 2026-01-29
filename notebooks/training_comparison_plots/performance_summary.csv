@@ -1,2 +1,0 @@
-Configuration,Final Total Loss,Min Total Loss,Final Global Loss,Final Local Loss,Final iBOT Loss,Final GRAM Loss,Training Steps,Final LR
-finetuning_v1,6.7500,6.4531,5.4922,5.6172,1.1723,0.0004,382200,1.00e-11

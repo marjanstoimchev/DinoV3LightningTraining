@@ -9,9 +9,8 @@ This document provides comprehensive examples for training DINOv3 models with Py
 Fastest way to test the framework:
 
 ```bash
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_test \
     --gpus 1 \
     --max-epochs 5 \
@@ -21,17 +20,16 @@ python src/training/train_dinov3_lightning.py \
 
 ### 2. Multi-GPU Training (Production)
 
-Full-scale training on 4 GPUs:
+Full-scale training on 3 GPUs:
 
 ```bash
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
-    --output-dir ./output_multigpu \
-    --gpus 4 \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
+    --output-dir ./output_eurosat \
+    --gpus 3 \
     --strategy ddp \
     --sampler-type distributed \
-    --batch-size 128 \
+    --batch-size 384 \
     --max-epochs 100 \
     --precision bf16-mixed
 ```
@@ -41,135 +39,170 @@ python src/training/train_dinov3_lightning.py \
 Continue training from a saved checkpoint:
 
 ```bash
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
-    --resume-from-checkpoint ./output/checkpoints/last.ckpt \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
+    --resume-from-checkpoint ./output_eurosat/checkpoints/last.ckpt \
     --output-dir ./output_resumed \
-    --gpus 4 \
+    --gpus 3 \
     --strategy ddp
+```
+
+### 4. Continued Pretraining from DINOv3
+
+Initialize from official DINOv3 weights for domain adaptation:
+
+```bash
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_continued_pretraining.yaml \
+    --output-dir ./output_eurosat_continued \
+    --gpus 3 \
+    --precision bf16-mixed
 ```
 
 ## Dataset-Specific Examples
 
-### HuggingFace Datasets
+### EuroSAT (Satellite Imagery)
 
-**Food-101 Dataset:**
 ```bash
-# First, update config file:
-# dataset_path: HuggingFace:name=food101:split=train
-
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
-    --output-dir ./output_food101 \
-    --gpus 2 \
+# From scratch
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
+    --output-dir ./output_eurosat \
+    --gpus 3 \
     --strategy ddp \
     --sampler-type distributed \
-    --batch-size 64
+    --batch-size 384 \
+    --max-epochs 100
+
+# Continued pretraining
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_continued_pretraining.yaml \
+    --output-dir ./output_eurosat_continued \
+    --gpus 3 \
+    --precision bf16-mixed
 ```
 
-**Oxford Pets Dataset:**
-```bash
-# Update config: dataset_path: HuggingFace:name=jonathancui/oxford-pets
+### DTD (Describable Textures)
 
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+```bash
+# From scratch
+python src/training/ssl/train.py \
+    --config-file configs/DTD/config_ssl_pretraining.yaml \
+    --output-dir ./output_dtd \
+    --gpus 3 \
+    --sampler-type distributed \
+    --max-epochs 100
+
+# With custom prototype count
+python src/training/ssl/train.py \
+    --config-file configs/DTD/config_ssl_pretraining.yaml \
+    --output-dir ./output_dtd_custom \
+    --gpus 3 \
+    --num-prototypes 4096 \
+    --koleo-weight 0.1
+```
+
+### Oxford Pets
+
+```bash
+python src/training/ssl/train.py \
+    --config-file configs/oxford_pets/config_ssl_pretraining.yaml \
     --output-dir ./output_pets \
-    --gpus 1 \
-    --sampler-type infinite \
-    --max-epochs 50
-```
-
-**Custom HuggingFace Dataset:**
-```bash
-# For dataset with custom column names:
-# dataset_path: HuggingFace:name=your/dataset:image_key=img:label_key=target
-
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
-    --output-dir ./output_custom \
-    --gpus 4 \
+    --gpus 2 \
     --sampler-type distributed \
-    --batch-size 128
+    --max-epochs 100
 ```
 
-### Custom TIFF Datasets
+### NCTCRCHE100K (Histopathology)
 
-**Medical Images:**
 ```bash
-# Update config: dataset_path: CustomTIFF:root=/data/medical_images/
-
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
-    --output-dir ./output_medical \
+# Large dataset - use distributed sampler
+python src/training/ssl/train.py \
+    --config-file configs/NCTCRCHE100K/config_ssl_pretraining.yaml \
+    --output-dir ./output_nctcrche \
     --gpus 4 \
     --strategy ddp \
+    --sampler-type distributed \
+    --batch-size 512 \
+    --max-epochs 100 \
+    --precision bf16-mixed
+```
+
+### Tissue (Custom TIFF Dataset)
+
+```bash
+python src/training/ssl/train.py \
+    --config-file configs/tissue/config_ssl_pretraining.yaml \
+    --output-dir ./output_tissue \
+    --gpus 3 \
     --sampler-type epoch \
-    --batch-size 96 \
     --max-epochs 200
 ```
 
-**Satellite Images:**
-```bash
-# For high-resolution satellite images
-# Update config to use larger crop sizes:
-# global_crops_size: 512
-# local_crops_size: 256
+### ImageNet-1K (Large Scale)
 
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_satellite.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
-    --output-dir ./output_satellite \
+```bash
+# Large-scale pretraining
+python src/training/ssl/train.py \
+    --config-file configs/imagenet1k/config_ssl_pretraining.yaml \
+    --output-dir ./output_imagenet \
     --gpus 8 \
     --strategy ddp \
     --sampler-type distributed \
-    --batch-size 64 \
-    --precision bf16-mixed
+    --batch-size 1024 \
+    --precision bf16-mixed \
+    --compile
 ```
 
 ## Architecture-Specific Examples
 
 ### ViT-Small (Default)
+
 ```bash
 # Fastest training, good for experimentation
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_vit_small \
-    --gpus 4 \
-    --batch-size 128 \
+    --gpus 3 \
+    --batch-size 384 \
     --sampler-type distributed
 ```
 
 ### ViT-Base (Higher Capacity)
-```bash
-# Update config: student.arch = vit_base
-# Use corresponding checkpoint: dinov3_vitb16_pretrain_lvd1689m-*.pth
 
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_vitbase.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vitb16_pretrain_lvd1689m-08c60483.pth \
+Modify the config file to use ViT-Base:
+
+```yaml
+# In config file:
+student:
+  arch: vit_base
+  patch_size: 14
+```
+
+```bash
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining_vitbase.yaml \
     --output-dir ./output_vit_base \
     --gpus 4 \
-    --batch-size 64 \  # Reduced batch size for larger model
+    --batch-size 256 \  # Reduced for larger model
     --sampler-type distributed
 ```
 
 ### ViT-Large (Maximum Performance)
-```bash
-# Update config: student.arch = vit_large  
-# Use corresponding checkpoint: dinov3_vitl16_pretrain_lvd1689m-*.pth
 
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_vitlarge.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vitl16_pretrain_lvd1689m-08c60483.pth \
+```yaml
+# In config file:
+student:
+  arch: vit_large
+  patch_size: 14
+```
+
+```bash
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining_vitlarge.yaml \
     --output-dir ./output_vit_large \
     --gpus 8 \
-    --batch-size 32 \  # Even smaller batch size
+    --batch-size 128 \  # Small batch for large model
     --accumulate-grad-batches 2 \
     --sampler-type distributed
 ```
@@ -177,164 +210,226 @@ python src/training/train_dinov3_lightning.py \
 ## Sampler Comparison Examples
 
 ### Infinite Sampler (SSL Training)
+
 ```bash
 # Best for continuous streaming, self-supervised learning
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_infinite \
-    --gpus 4 \
+    --gpus 3 \
     --sampler-type infinite \
-    --batch-size 128
-    
-# Progress shown as: Step 384/600 (64.0%)
+    --batch-size 384
+
+# Progress shown as: Step 384/70 (epoch length from config)
 # Uses OFFICIAL_EPOCH_LENGTH from config
 ```
 
 ### Distributed Sampler (Multi-GPU Efficiency)
+
 ```bash
 # Best for multi-GPU training efficiency
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_distributed \
-    --gpus 4 \
+    --gpus 3 \
     --strategy ddp \
     --sampler-type distributed \
-    --batch-size 128
-    
-# Progress shown as: Step 207/207 (100.0%) per GPU
+    --batch-size 384
+
 # Dataset automatically split across GPUs
 ```
 
 ### Epoch Sampler (Traditional Training)
+
 ```bash
 # Traditional epoch-based training
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_epoch \
-    --gpus 4 \
+    --gpus 3 \
     --sampler-type epoch \
-    --batch-size 128
-    
-# Progress shown as: Step 832/832 (100.0%) per GPU  
-# Each GPU sees the full dataset
+    --batch-size 384
+
+# Each GPU sees the full dataset per epoch
+```
+
+## GRAM Loss Examples
+
+### Enable GRAM Loss
+
+```bash
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
+    --output-dir ./output_gram \
+    --gpus 3 \
+    --enable-gram \
+    --gram-weight 1.0 \
+    --precision bf16-mixed
+```
+
+### GRAM with Custom Weight
+
+```bash
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
+    --output-dir ./output_gram_custom \
+    --gpus 3 \
+    --enable-gram \
+    --gram-weight 0.5 \
+    --precision bf16-mixed
+```
+
+## Prototype Analysis Examples
+
+### Basic Sweep
+
+```bash
+./scripts/prototype_analysis/run_sweep.sh \
+    --dataset eurosat \
+    --gpus 0,1,2 \
+    --prototypes "128 256 512 1024" \
+    --seeds "0 1 42" \
+    --pretrain-epochs 100 \
+    --classify-epochs 30
+```
+
+### Multi-Dataset Sweep
+
+```bash
+./scripts/prototype_analysis/run_sweep.sh \
+    --datasets "dtd eurosat oxford_pets" \
+    --gpus 0,1,2,3 \
+    --prototypes "128 256 512 1024 2048 4096" \
+    --seeds "0 1 42" \
+    --classify-mode finetune \
+    --precision bf16-mixed
+```
+
+### Continued Pretraining Sweep
+
+```bash
+./scripts/prototype_analysis/run_sweep.sh \
+    --dataset dtd \
+    --gpus 0,1,2 \
+    --prototypes "128 256 512 1024" \
+    --seeds "0 1 42" \
+    --pretrain-checkpoint dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+    --output-dir prototype_analysis_continued
+```
+
+### Sweep with GRAM Loss
+
+```bash
+./scripts/prototype_analysis/run_sweep.sh \
+    --dataset dtd \
+    --gpus 0,1,2 \
+    --prototypes "128 256 512" \
+    --seeds "0 1 42" \
+    --enable-gram \
+    --gram-weight 0.5
+```
+
+## Classification Examples
+
+### Fine-tuning
+
+```bash
+python scripts/classification/train.py \
+    --config configs/eurosat/config_classification.yaml \
+    --pretrained_path ./output_eurosat/checkpoints/pretraining/last.ckpt \
+    --max_epochs 30 \
+    --learning_rate 0.0001 \
+    --devices 0,1 \
+    --encoder_type teacher \
+    --precision bf16-mixed
+```
+
+### Linear Evaluation (Frozen Backbone)
+
+```bash
+python scripts/classification/train.py \
+    --config configs/eurosat/config_classification.yaml \
+    --pretrained_path ./output_eurosat/checkpoints/pretraining/last.ckpt \
+    --max_epochs 30 \
+    --devices 0 \
+    --freeze_backbone
+```
+
+### Evaluation Only
+
+```bash
+python scripts/classification/eval.py \
+    --config configs/eurosat/config_classification.yaml \
+    --checkpoint_path ./output_classification/checkpoints/best.ckpt \
+    --devices 0
 ```
 
 ## Performance Optimization Examples
 
 ### Memory-Optimized Training
+
 ```bash
 # For limited GPU memory
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_memory_opt \
-    --gpus 4 \
-    --batch-size 32 \  # Smaller total batch
-    --accumulate-grad-batches 4 \  # Simulate larger batch
-    --precision bf16-mixed \  # Mixed precision
+    --gpus 3 \
+    --batch-size 192 \  # Smaller total batch
+    --accumulate-grad-batches 2 \  # Simulate larger batch
+    --precision bf16-mixed \
     --sampler-type distributed
 ```
 
 ### Speed-Optimized Training
+
 ```bash
-# For maximum speed
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+# For maximum speed with PyTorch 2.0 compilation
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_speed_opt \
-    --gpus 4 \
-    --batch-size 128 \
-    --compile \  # PyTorch 2.0 compilation
+    --gpus 3 \
+    --batch-size 384 \
+    --compile \
     --sampler-type distributed \
-    --precision bf16-mixed \
-    --num-nodes 1
+    --precision bf16-mixed
 ```
 
 ### Large-Scale Training
+
 ```bash
 # Multi-node, high-throughput training
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_largescale.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/imagenet1k/config_ssl_pretraining.yaml \
     --output-dir ./output_largescale \
     --gpus 8 \
-    --num-nodes 4 \  # 32 GPUs total
-    --batch-size 512 \  # Large batch size
+    --num-nodes 2 \  # 16 GPUs total
+    --batch-size 2048 \
     --strategy ddp \
     --sampler-type distributed \
     --precision bf16-mixed \
     --save-every-n-steps 1000
 ```
 
-## Advanced Configuration Examples
-
-### Custom Learning Rate Schedule
-```yaml
-# In config file:
-optim:
-  lr: 0.0005              # Higher initial LR
-  warmup_epochs: 10       # Longer warmup
-  weight_decay: 0.01      # Lower weight decay
-  min_lr: 1.0e-06        # Lower minimum LR
-  
-# Run with:
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_custom_lr.yaml \
-    --max-epochs 200 \
-    --gpus 4
-```
-
-### Data Augmentation Tuning
-```yaml
-# In config file - for high-resolution images:
-crops:
-  global_crops_size: 384       # Larger global crops
-  local_crops_size: 196        # Larger local crops  
-  global_crops_scale: [0.6, 1.0]  # Less aggressive scaling
-  local_crops_number: 8        # More local crops
-  
-# Run with:
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_hires_augment.yaml \
-    --gpus 4 \
-    --batch-size 64  # Reduced for larger images
-```
-
-### Loss Weight Tuning
-```yaml
-# In config file - for noisy datasets:
-dino:
-  loss_weight: 0.8           # Reduce DINO loss
-  koleo_loss_weight: 0.1     # Increase regularization
-  
-ibot:
-  loss_weight: 1.2           # Increase iBOT loss
-  mask_sample_probability: 0.4  # More aggressive masking
-```
-
 ## Debugging and Development
 
 ### Fast Development Iteration
+
 ```bash
 # Quick training for code testing
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_debug \
     --gpus 1 \
-    --fast-dev-run \  # Only 2 batches
+    --fast-dev-run \
     --sampler-type infinite
 ```
 
 ### Limited Training for Testing
+
 ```bash
 # Train on subset of data
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_subset \
     --gpus 1 \
     --limit-train-batches 0.01 \  # Only 1% of data
@@ -343,44 +438,36 @@ python src/training/train_dinov3_lightning.py \
 ```
 
 ### Profiling Training
+
 ```bash
-# With detailed profiling
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+# With detailed logging
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
     --output-dir ./output_profile \
     --gpus 1 \
     --max-epochs 1 \
-    --limit-train-batches 100 \  # Fixed number of batches
-    --log-every-n-steps 1  # Detailed logging
+    --limit-train-batches 100 \
+    --log-every-n-steps 1
 ```
 
 ## Monitoring Examples
 
 ### TensorBoard Monitoring
+
 ```bash
 # Start training
-python src/training/train_dinov3_lightning.py ... --output-dir ./output
+python src/training/ssl/train.py \
+    --config-file configs/eurosat/config_ssl_pretraining.yaml \
+    --output-dir ./output
 
-# In another terminal, start TensorBoard  
+# In another terminal, start TensorBoard
 tensorboard --logdir ./output/tensorboard_logs --port 6006
 
 # Open browser: http://localhost:6006
 ```
 
-### WandB Integration
-```yaml
-# In config file:
-logging:
-  wandb:
-    project: "dinov3-training"
-    entity: "your-username" 
-    name: "vit-small-food101"
-
-# Run training normally, metrics will appear in WandB
-```
-
 ### CSV Logging Analysis
+
 ```python
 # Analyze training logs
 import pandas as pd
@@ -395,8 +482,8 @@ plt.subplot(1, 2, 1)
 plt.plot(logs['step'], logs['total_loss'])
 plt.title('Total Loss')
 
-plt.subplot(1, 2, 2)  
-plt.plot(logs['step'], logs['dino_local_loss'], label='DINO')
+plt.subplot(1, 2, 2)
+plt.plot(logs['step'], logs['dino_local_loss'], label='DINO Local')
 plt.plot(logs['step'], logs['ibot_loss'], label='iBOT')
 plt.legend()
 plt.title('Component Losses')
@@ -406,42 +493,62 @@ plt.show()
 ## Common Workflow Examples
 
 ### Experiment Pipeline
+
 ```bash
 # 1. Quick test on small dataset
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/dtd/config_ssl_pretraining.yaml \
     --output-dir ./output_test \
     --gpus 1 --max-epochs 5 --limit-train-batches 0.1
 
-# 2. Medium-scale validation  
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+# 2. Medium-scale validation
+python src/training/ssl/train.py \
+    --config-file configs/dtd/config_ssl_pretraining.yaml \
     --output-dir ./output_validation \
-    --gpus 2 --max-epochs 20 --batch-size 64
+    --gpus 2 --max-epochs 20 --batch-size 256
 
 # 3. Full production training
-python src/training/train_dinov3_lightning.py \
-    --config-file configs/config_lightning_finetuning.yaml \
-    --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
+python src/training/ssl/train.py \
+    --config-file configs/dtd/config_ssl_pretraining.yaml \
     --output-dir ./output_production \
-    --gpus 4 --max-epochs 100 --batch-size 128 --strategy ddp
+    --gpus 3 --max-epochs 100 --batch-size 384 --strategy ddp
 ```
 
 ### Hyperparameter Search
+
 ```bash
-# Grid search over learning rates
-for lr in 0.0001 0.0005 0.001; do
-    python src/training/train_dinov3_lightning.py \
-        --config-file configs/config_lightning_finetuning.yaml \
-        --checkpoint-path dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
-        --output-dir ./output_lr_${lr} \
-        --gpus 2 \
-        --max-epochs 20 \
-        --batch-size 64
-    # Update lr in config or use config override
+# Grid search over prototype counts
+for proto in 128 256 512 1024 2048 4096; do
+    python src/training/ssl/train.py \
+        --config-file configs/eurosat/config_ssl_pretraining.yaml \
+        --output-dir ./output_proto_${proto} \
+        --gpus 3 \
+        --max-epochs 100 \
+        --num-prototypes $proto
 done
 ```
 
-This comprehensive examples guide should cover most use cases for training DINOv3 models with PyTorch Lightning.
+### Domain Adaptation Pipeline
+
+```bash
+# 1. Start from DINOv3 pretrained weights
+python src/training/ssl/train.py \
+    --config-file configs/tissue/config_ssl_continued_pretraining.yaml \
+    --output-dir ./output_tissue_adapted \
+    --gpus 3 \
+    --max-epochs 50
+
+# 2. Fine-tune for classification
+python scripts/classification/train.py \
+    --config configs/tissue/config_classification.yaml \
+    --pretrained_path ./output_tissue_adapted/checkpoints/pretraining/last.ckpt \
+    --max_epochs 30 \
+    --devices 0,1
+
+# 3. Evaluate
+python scripts/classification/eval.py \
+    --config configs/tissue/config_classification.yaml \
+    --checkpoint_path ./output_classification/checkpoints/best.ckpt
+```
+
+This comprehensive examples guide covers most use cases for training DINOv3 models with PyTorch Lightning.

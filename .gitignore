@@ -62,6 +62,8 @@ Datasets/
 *.jpeg
 
 # Analysis results  
+results/
+prototype_analysis_dinov3/
 feature_analysis_results/
 attention_analysis_/*
 plots/
@@ -72,3 +74,25 @@ plots/
 dinov3/checkpoints/
 *.ckpt
 *.pthdinov3/
+
+
+# Experiment outputs / artifacts
+results/
+output*/
+checkpoints/
+logs/
+lightning_logs/
+mlruns/
+.neptune/
+prototype_analysis_dinov3/
+feature_analysis_results/
+attention_analysis_*/
+plots/
+
+# If you want to keep images only in docs (optional)
+*.png
+!docs/**/*.png
+!doc/**/*.png
+notebooks/retrieval.ipynb
+notebooks/
+.ipynb_checkpoints/
