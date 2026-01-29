@@ -88,7 +88,14 @@ class LinearClassifier(nn.Module):
         self._init_head()
 
     def _detect_architecture(self, path, encoder_type, num_storage_tokens, mask_k_bias):
-        """Auto-detect architecture settings from checkpoint."""
+        """Auto-detect architecture settings from checkpoint.
+
+        Searches for storage_tokens and qkv.bias_mask in checkpoint state dict
+        using multiple key prefix patterns to handle different checkpoint formats.
+
+        Falls back to DINOv3 official defaults (n_storage_tokens=4, mask_k_bias=True)
+        if detection fails, ensuring compatibility with official pretrained weights.
+        """
         print(f"Auto-detecting architecture from checkpoint: {path}")
 
         ckpt = torch.load(path, map_location="cpu", weights_only=False)
@@ -101,27 +108,50 @@ class LinearClassifier(nn.Module):
         else:
             state = ckpt
 
-        # Determine prefix based on checkpoint format
+        # Determine prefix based on checkpoint format - try multiple patterns
+        # to handle SSL checkpoints, classification checkpoints, and official weights
         if encoder_type == "teacher":
-            prefixes = ["ssl_model.teacher.backbone._orig_mod.", "ssl_model.teacher.backbone.", ""]
+            prefixes = [
+                "ssl_model.teacher.backbone._orig_mod.",
+                "ssl_model.teacher.backbone.",
+                "model.encoder.",  # Classification checkpoint format
+                "encoder.",        # Direct encoder format
+                "",                # Official DINOv3 checkpoint format (direct keys)
+            ]
         else:
-            prefixes = ["ssl_model.student.backbone._orig_mod.", "ssl_model.student.backbone.", ""]
+            prefixes = [
+                "ssl_model.student.backbone._orig_mod.",
+                "ssl_model.student.backbone.",
+                "model.encoder.",
+                "encoder.",
+                "",
+            ]
 
         detected_storage = num_storage_tokens
         detected_mask_bias = mask_k_bias
 
-        # Try to find storage_tokens
+        # Try to find storage_tokens with all prefix patterns
         if detected_storage is None:
             for prefix in prefixes:
                 key = f"{prefix}storage_tokens"
                 if key in state:
                     detected_storage = state[key].shape[1]  # Shape is [1, n_tokens, embed_dim]
-                    print(f"  Detected n_storage_tokens={detected_storage} from checkpoint")
+                    print(f"  Detected n_storage_tokens={detected_storage} from checkpoint (key: {key})")
                     break
+
+            # Also try searching for any key containing 'storage_tokens'
             if detected_storage is None:
-                # No storage_tokens found, assume 0
-                detected_storage = 0
-                print(f"  No storage_tokens found, using n_storage_tokens=0")
+                for key in state.keys():
+                    if 'storage_tokens' in key and key.endswith('storage_tokens'):
+                        detected_storage = state[key].shape[1]
+                        print(f"  Detected n_storage_tokens={detected_storage} from checkpoint (key: {key})")
+                        break
+
+            if detected_storage is None:
+                # IMPORTANT: Default to DINOv3 official value (4), not 0
+                # This ensures compatibility with official pretrained weights
+                detected_storage = 4
+                print(f"  No storage_tokens found in checkpoint, using DINOv3 default n_storage_tokens=4")
 
         # Try to find qkv.bias_mask to detect mask_k_bias
         if detected_mask_bias is None:
@@ -129,12 +159,22 @@ class LinearClassifier(nn.Module):
                 key = f"{prefix}blocks.0.attn.qkv.bias_mask"
                 if key in state:
                     detected_mask_bias = True
-                    print(f"  Detected mask_k_bias=True from checkpoint")
+                    print(f"  Detected mask_k_bias=True from checkpoint (key: {key})")
                     break
+
+            # Also try searching for any key containing 'bias_mask'
             if detected_mask_bias is None:
-                # No bias_mask found, assume False
-                detected_mask_bias = False
-                print(f"  No qkv.bias_mask found, using mask_k_bias=False")
+                for key in state.keys():
+                    if 'qkv.bias_mask' in key:
+                        detected_mask_bias = True
+                        print(f"  Detected mask_k_bias=True from checkpoint (key: {key})")
+                        break
+
+            if detected_mask_bias is None:
+                # IMPORTANT: Default to DINOv3 official value (True), not False
+                # This ensures compatibility with official pretrained weights
+                detected_mask_bias = True
+                print(f"  No qkv.bias_mask found in checkpoint, using DINOv3 default mask_k_bias=True")
 
         return detected_storage, detected_mask_bias
 

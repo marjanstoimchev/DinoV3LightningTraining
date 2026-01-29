@@ -46,8 +46,8 @@ student:
   proj_bias: true
   ffn_bias: true
   norm_layer: "layernorm"
-  n_storage_tokens: 0
-  mask_k_bias: false
+  n_storage_tokens: 4  # DINOv3 official default - MUST match pretraining config
+  mask_k_bias: true    # DINOv3 official default - MUST match pretraining config
   untie_cls_and_patch_norms: false
   untie_global_and_local_cls_norm: false
   in_chans: 3

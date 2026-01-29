@@ -116,6 +116,8 @@ echo ""
 # Run sweep inside Singularity container
 # =============================================================================
 
+export SINGULARITYENV_TORCH_COMPILE_DISABLE=1 #
+
 # --- Proxy settings (required for compute nodes to reach the internet) ---
 export https_proxy=http://www-proxy.ijs.si:8080
 export http_proxy=http://www-proxy.ijs.si:8080
@@ -135,6 +137,14 @@ export SINGULARITYENV_TORCH_HOME="$TORCH_HOME"
 # --- CUDA memory allocation ---
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export SINGULARITYENV_PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF"
+
+# --- Prevent local packages from overriding container ---
+export SINGULARITYENV_PYTHONNOUSERSITE=1
+
+# --- Use random port for DDP to avoid conflicts with other jobs ---
+export MASTER_PORT=$((29500 + SLURM_JOB_ID % 1000))
+export SINGULARITYENV_MASTER_PORT="$MASTER_PORT"
+echo "Using MASTER_PORT: $MASTER_PORT"
 
 # --- Shared memory for DataLoader workers ---
 SHM_DIR="/dev/shm/${USER}_${SLURM_JOB_ID}"

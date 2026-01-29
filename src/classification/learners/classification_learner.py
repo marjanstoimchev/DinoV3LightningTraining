@@ -128,7 +128,12 @@ class ClassificationLearner(L.LightningModule):
 
     @classmethod
     def _detect_architecture_from_state_dict(cls, state_dict):
-        """Auto-detect architecture settings from checkpoint state_dict."""
+        """Auto-detect architecture settings from checkpoint state_dict.
+
+        Searches for storage_tokens and qkv.bias_mask in the state dict.
+        Falls back to DINOv3 official defaults (n_storage_tokens=4, mask_k_bias=True)
+        if not found, ensuring compatibility with official pretrained weights.
+        """
         detected_storage_tokens = None
         detected_mask_k_bias = None
 
@@ -136,22 +141,27 @@ class ClassificationLearner(L.LightningModule):
         for key in state_dict.keys():
             if 'storage_tokens' in key and key.endswith('storage_tokens'):
                 detected_storage_tokens = state_dict[key].shape[1]
-                print(f"  Auto-detected num_storage_tokens={detected_storage_tokens} from checkpoint state_dict")
+                print(f"  Auto-detected num_storage_tokens={detected_storage_tokens} from checkpoint (key: {key})")
                 break
 
         if detected_storage_tokens is None:
-            detected_storage_tokens = 4  # DINOv3 official default
-            print(f"  No storage_tokens found in checkpoint, using num_storage_tokens=4")
+            # IMPORTANT: Default to DINOv3 official value (4), not 0
+            # This ensures compatibility with official pretrained weights
+            detected_storage_tokens = 4
+            print(f"  No storage_tokens found in checkpoint, using DINOv3 default num_storage_tokens=4")
 
         # Detect mask_k_bias from state_dict
         for key in state_dict.keys():
             if 'qkv.bias_mask' in key:
                 detected_mask_k_bias = True
-                print(f"  Auto-detected mask_k_bias=True from checkpoint state_dict")
+                print(f"  Auto-detected mask_k_bias=True from checkpoint (key: {key})")
                 break
 
         if detected_mask_k_bias is None:
-            detected_mask_k_bias = True  # DINOv3 official default
+            # IMPORTANT: Default to DINOv3 official value (True), not False
+            # This ensures compatibility with official pretrained weights
+            detected_mask_k_bias = True
+            print(f"  No qkv.bias_mask found in checkpoint, using DINOv3 default mask_k_bias=True")
 
         return detected_storage_tokens, detected_mask_k_bias
 
