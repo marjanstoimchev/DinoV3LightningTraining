@@ -61,6 +61,40 @@ wget -O dinov3_official_weights/dinov3_vits16_pretrain_lvd1689m-08c60483.pth \
     https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth
 ```
 
+### 4. Build Singularity Container (HPC/SLURM)
+
+For running on HPC clusters with SLURM, build the Singularity container:
+
+**Prerequisites:**
+- Singularity 3.x installed
+- `requirements.txt` in repo root
+- Flash Attention wheel: `flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl`
+
+**Build the container:**
+
+```bash
+# Build from definition file (requires sudo or fakeroot)
+sudo singularity build deeplearning.sif Singularity.def
+
+# Or with fakeroot (no sudo needed if configured)
+singularity build --fakeroot deeplearning.sif Singularity.def
+```
+
+**Container details:**
+- Base image: `pytorch/pytorch:2.8.0-cuda12.8-cudnn9-runtime`
+- Python 3.11, PyTorch 2.8.0, CUDA 12.8
+- Includes: PyTorch Lightning, Flash Attention, HuggingFace libraries
+
+**Usage with SLURM:**
+
+```bash
+# Option 1: Place container in home directory
+mv deeplearning.sif ~/
+
+# Option 2: Specify path when submitting
+SIF_IMAGE="/path/to/deeplearning.sif" sbatch scripts/prototype_analysis/run_sweep_slurm.sh
+```
+
 ## Quick Start
 
 ### Single Dataset SSL Pretraining

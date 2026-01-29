@@ -1,0 +1,36 @@
+Bootstrap: docker
+From: pytorch/pytorch:2.8.0-cuda12.8-cudnn9-runtime
+
+%labels
+    Maintainer Marjan
+    Purpose PyTorch + Lightning for DinoV3
+
+%environment
+    export PYTHONUNBUFFERED=1
+    export HF_HOME=/opt/hf_cache
+    export TORCH_HOME=/opt/torch_cache
+    export MPLBACKEND=Agg
+    export PATH=/opt/conda/bin:$PATH
+
+%files
+    requirements.txt /workspace/requirements.txt
+    flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl /workspace/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
+
+%post
+    set -e
+    apt-get update && apt-get install -y --no-install-recommends \
+        git graphviz && \
+        rm -rf /var/lib/apt/lists/*
+
+    pip install --no-cache-dir --upgrade pip wheel setuptools
+
+    mkdir -p /workspace /opt/hf_cache /opt/torch_cache
+    chmod -R 777 /workspace /opt/hf_cache /opt/torch_cache
+
+    pip install --no-cache-dir -r /workspace/requirements.txt
+
+    # flash_attn: install from local wheel (copied via %files)
+    pip install --no-cache-dir /workspace/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
+
+%runscript
+    exec python "$@"

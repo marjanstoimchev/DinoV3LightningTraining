@@ -10,6 +10,12 @@ ENV/
 env.bak/
 venv.bak/
 
+# Singularity containers (large binary files)
+*.sif
+
+# Python wheels (large binary files)
+*.whl
+
 # PyTorch Lightning logs
 lightning_logs/
 mlruns/
