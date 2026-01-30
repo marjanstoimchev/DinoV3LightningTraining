@@ -58,6 +58,15 @@ echo "Working dir:     $(pwd)"
 echo "Container:       $SIF_IMAGE"
 echo "Start time:      $(date)"
 echo "============================================================"
+
+# Show GPU details
+echo ""
+echo "GPU Information:"
+echo "------------------------------------------------------------"
+nvidia-smi --query-gpu=index,name,memory.total,memory.free,driver_version --format=csv
+echo "------------------------------------------------------------"
+echo ""
+
 squeue -l
 echo ""
 
@@ -77,7 +86,7 @@ BATCH_SIZE="${BATCH_SIZE:-128}"
 KOLEO_WEIGHT="${KOLEO_WEIGHT:-0.1}"
 OUTPUT_DIR="${OUTPUT_DIR:-prototype_analysis_dinov3}"
 PRECISION="${PRECISION:-bf16-mixed}"
-COMPILE="${COMPILE:-}"
+COMPILE="${COMPILE:-1}"  # Enable torch.compile by default for faster training
 
 # Continued pretraining support
 CONTINUED_PRETRAINING="${CONTINUED_PRETRAINING:-}"
@@ -116,7 +125,10 @@ echo ""
 # Run sweep inside Singularity container
 # =============================================================================
 
-export SINGULARITYENV_TORCH_COMPILE_DISABLE=1 #
+# Only disable torch.compile if COMPILE is not set
+if [[ -z "$COMPILE" ]]; then
+    export SINGULARITYENV_TORCH_COMPILE_DISABLE=1
+fi
 
 # --- Proxy settings (required for compute nodes to reach the internet) ---
 # export https_proxy=http://www-proxy.ijs.si:8080
