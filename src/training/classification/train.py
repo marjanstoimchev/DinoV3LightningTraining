@@ -34,6 +34,7 @@ Usage examples:
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Dict, Any
@@ -157,9 +158,17 @@ def main():
     default_cfg = get_default_config()
     ssl_cfg = OmegaConf.merge(default_cfg, ssl_cfg_original)
 
-    # Batch size is TOTAL, divide by GPUs (same as MPP)
-    per_gpu_batch_size = args.batch_size // args.gpus if args.gpus > 0 else args.batch_size
-    print(f"Batch size: {args.batch_size} total -> {per_gpu_batch_size} per GPU ({args.gpus} GPUs)")
+    # Detect SLURM-based distribution
+    slurm_ntasks = int(os.environ.get("SLURM_NTASKS", "1"))
+    slurm_launch = os.environ.get("SLURM_LAUNCH", "")
+
+    # Batch size is TOTAL, divide by workers (same as MPP)
+    if slurm_launch and slurm_ntasks > 1:
+        num_workers = slurm_ntasks
+    else:
+        num_workers = args.gpus if args.gpus > 0 else 1
+    per_gpu_batch_size = args.batch_size // num_workers
+    print(f"Batch size: {args.batch_size} total -> {per_gpu_batch_size} per GPU ({num_workers} workers)")
 
     # Create a temporary config for the data module
     class_cfg = OmegaConf.create({
@@ -263,22 +272,38 @@ def main():
     )
     loggers = [tb_logger, csv_logger]
 
+    # Detect SLURM-based distribution for trainer
+    slurm_procid = os.environ.get("SLURM_PROCID")
+
+    # Determine effective devices and strategy
+    effective_devices = args.gpus
+    effective_strategy = args.strategy
+
+    if slurm_launch and slurm_ntasks > 1 and slurm_procid is not None:
+        # SLURM is handling distribution - each task gets 1 GPU
+        effective_devices = 1
+        effective_strategy = "ddp"
+        print(f"SLURM distribution detected: task {slurm_procid}/{slurm_ntasks}")
+        print(f"Using devices=1, strategy=ddp (SLURM handles multi-GPU)")
+    elif args.gpus > 1:
+        effective_strategy = "ddp" if args.strategy == "auto" else args.strategy
+
     # Create trainer
     trainer = pl.Trainer(
         max_epochs=args.max_epochs,
         accelerator="auto",
-        devices=args.gpus,
+        devices=effective_devices,
         num_nodes=args.num_nodes,
-        strategy=args.strategy,
+        strategy=effective_strategy,
         precision=args.precision,
         callbacks=callbacks,
         logger=loggers,
         log_every_n_steps=args.log_every_n_steps,
-        sync_batchnorm=True if args.gpus > 1 or args.num_nodes > 1 else False,
+        sync_batchnorm=True if slurm_ntasks > 1 or args.gpus > 1 or args.num_nodes > 1 else False,
         enable_checkpointing=True,
         enable_progress_bar=True,
         enable_model_summary=True,
-        deterministic=True,
+        deterministic=False,
         limit_train_batches=1.0,
         val_check_interval=1.0,
     )

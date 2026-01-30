@@ -102,3 +102,6 @@ plots/
 notebooks/retrieval.ipynb
 notebooks/
 .ipynb_checkpoints/
+
+# Official DINOv3 weights (large binary files)
+dinov3_official_weights/

@@ -119,12 +119,12 @@ echo ""
 export SINGULARITYENV_TORCH_COMPILE_DISABLE=1 #
 
 # --- Proxy settings (required for compute nodes to reach the internet) ---
-export https_proxy=http://www-proxy.ijs.si:8080
-export http_proxy=http://www-proxy.ijs.si:8080
-export no_proxy=127.0.0.0/8
-export SINGULARITYENV_https_proxy="$https_proxy"
-export SINGULARITYENV_http_proxy="$http_proxy"
-export SINGULARITYENV_no_proxy="$no_proxy"
+# export https_proxy=http://www-proxy.ijs.si:8080
+# export http_proxy=http://www-proxy.ijs.si:8080
+# export no_proxy=127.0.0.0/8
+# export SINGULARITYENV_https_proxy="$https_proxy"
+# export SINGULARITYENV_http_proxy="$http_proxy"
+# export SINGULARITYENV_no_proxy="$no_proxy"
 
 # --- Writable cache directories ---
 export HF_HOME="$HOME/.cache/huggingface"
@@ -146,9 +146,17 @@ export MASTER_PORT=$((29500 + SLURM_JOB_ID % 1000))
 export SINGULARITYENV_MASTER_PORT="$MASTER_PORT"
 echo "Using MASTER_PORT: $MASTER_PORT"
 
-# --- Shared memory for DataLoader workers ---
-SHM_DIR="/dev/shm/${USER}_${SLURM_JOB_ID}"
-mkdir -p "$SHM_DIR"
+# --- SLURM-based distribution (don't use torchrun, let srun handle it) ---
+export SLURM_LAUNCH=1
+export SINGULARITYENV_SLURM_LAUNCH="$SLURM_LAUNCH"
+
+# --- Pass SLURM environment variables to container for DDP ---
+export SINGULARITYENV_SLURM_PROCID="$SLURM_PROCID"
+export SINGULARITYENV_SLURM_NTASKS="$SLURM_NTASKS"
+export SINGULARITYENV_SLURM_LOCALID="$SLURM_LOCALID"
+export SINGULARITYENV_SLURM_NODELIST="$SLURM_NODELIST"
+export SINGULARITYENV_SLURM_JOB_NODELIST="$SLURM_JOB_NODELIST"
+export SINGULARITYENV_SLURM_JOB_NUM_NODES="$SLURM_JOB_NUM_NODES"
 
 # Build command arguments
 SWEEP_ARGS=(
@@ -171,6 +179,10 @@ SWEEP_ARGS=(
 [[ -n "$COMPILE" ]] && SWEEP_ARGS+=(--compile)
 [[ -n "$ENABLE_GRAM" ]] && SWEEP_ARGS+=(--enable-gram)
 [[ -n "$GRAM_WEIGHT" ]] && SWEEP_ARGS+=(--gram-weight "$GRAM_WEIGHT")
+
+# --- Shared memory for DataLoader workers ---
+SHM_DIR="/dev/shm/${USER}_${SLURM_JOB_ID}"
+mkdir -p "$SHM_DIR"
 
 srun singularity exec --nv \
     --bind "$SLURM_SUBMIT_DIR":"$SLURM_SUBMIT_DIR" \

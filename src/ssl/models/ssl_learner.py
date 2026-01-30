@@ -141,31 +141,54 @@ class SSLLearner(pl.LightningModule):
             self.lr_schedules = self._build_schedules_v2()
         else:
             OFFICIAL_EPOCH_LENGTH = self.cfg.train.OFFICIAL_EPOCH_LENGTH
+            total_epochs = self.cfg.optim["epochs"]
+            warmup_epochs = self.cfg.optim["warmup_epochs"]
+
+            # Clamp warmup_epochs to be at most total_epochs (handles --max-epochs override)
+            if warmup_epochs > total_epochs:
+                logger.warning(
+                    f"warmup_epochs ({warmup_epochs}) > total epochs ({total_epochs}). "
+                    f"Clamping warmup to {total_epochs} epochs."
+                )
+                warmup_epochs = total_epochs
+
+            # Clamp other epoch-based parameters
+            freeze_last_layer_epochs = min(
+                self.cfg.optim.get("freeze_last_layer_epochs", 0),
+                total_epochs
+            )
+            warmup_teacher_temp_epochs = min(
+                self.cfg.teacher.get("warmup_teacher_temp_epochs", 0),
+                total_epochs
+            )
+
+            total_iters = total_epochs * OFFICIAL_EPOCH_LENGTH
+
             lr = dict(
                 base_value=self.cfg.optim["lr"],
                 final_value=self.cfg.optim["min_lr"],
-                total_iters=self.cfg.optim["epochs"] * OFFICIAL_EPOCH_LENGTH,
-                warmup_iters=self.cfg.optim["warmup_epochs"] * OFFICIAL_EPOCH_LENGTH,
+                total_iters=total_iters,
+                warmup_iters=warmup_epochs * OFFICIAL_EPOCH_LENGTH,
                 start_warmup_value=0,
                 trunc_extra=self.cfg.optim.get("schedule_trunc_extra", False),
             )
             wd = dict(
                 base_value=self.cfg.optim["weight_decay"],
                 final_value=self.cfg.optim["weight_decay_end"],
-                total_iters=self.cfg.optim["epochs"] * OFFICIAL_EPOCH_LENGTH,
+                total_iters=total_iters,
                 trunc_extra=self.cfg.optim.get("schedule_trunc_extra", False),
             )
             momentum = dict(
                 base_value=self.cfg.teacher["momentum_teacher"],
                 final_value=self.cfg.teacher["final_momentum_teacher"],
-                total_iters=self.cfg.optim["epochs"] * OFFICIAL_EPOCH_LENGTH,
+                total_iters=total_iters,
                 trunc_extra=self.cfg.optim.get("schedule_trunc_extra", False),
             )
             teacher_temp = dict(
                 base_value=self.cfg.teacher["teacher_temp"],
                 final_value=self.cfg.teacher["teacher_temp"],
-                total_iters=self.cfg.teacher["warmup_teacher_temp_epochs"] * OFFICIAL_EPOCH_LENGTH,
-                warmup_iters=self.cfg.teacher["warmup_teacher_temp_epochs"] * OFFICIAL_EPOCH_LENGTH,
+                total_iters=warmup_teacher_temp_epochs * OFFICIAL_EPOCH_LENGTH or 1,  # Avoid zero
+                warmup_iters=warmup_teacher_temp_epochs * OFFICIAL_EPOCH_LENGTH or 1,
                 start_warmup_value=self.cfg.teacher["warmup_teacher_temp"],
             )
 
@@ -175,7 +198,7 @@ class SSLLearner(pl.LightningModule):
             teacher_temp_schedule = CosineScheduler(**teacher_temp)
             last_layer_lr_schedule = CosineScheduler(**lr)
 
-            last_layer_lr_schedule.schedule[: self.cfg.optim["freeze_last_layer_epochs"] * OFFICIAL_EPOCH_LENGTH] = 0
+            last_layer_lr_schedule.schedule[: freeze_last_layer_epochs * OFFICIAL_EPOCH_LENGTH] = 0
 
             self.lr_schedules = (
                 lr_schedule,

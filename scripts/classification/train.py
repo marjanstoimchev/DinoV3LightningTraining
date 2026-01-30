@@ -131,6 +131,10 @@ def main():
     device_list = args.devices.split(",")
     num_gpus = len(device_list)
 
+    # Check if SLURM is handling distribution (srun with --ntasks-per-node)
+    slurm_launch = os.environ.get("SLURM_LAUNCH", "")
+    slurm_ntasks = int(os.environ.get("SLURM_NTASKS", "1"))
+
     # Create directories
     output_dir = str(Path(args.checkpoint_dir).parent)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -140,8 +144,13 @@ def main():
     # Build the command for the actual training script
     train_script = "src/training/classification/train.py"
 
-    # Base command - use torchrun for multi-GPU
-    if num_gpus > 1:
+    # Base command - use torchrun for multi-GPU unless SLURM handles distribution
+    if slurm_launch and slurm_ntasks > 1:
+        # SLURM with srun handles process spawning - don't use torchrun
+        cmd = ["python", train_script]
+        num_gpus = slurm_ntasks  # Override with SLURM's task count
+        print(f"SLURM-based distribution detected: {slurm_ntasks} tasks")
+    elif num_gpus > 1:
         cmd = [
             "torchrun",
             f"--nproc_per_node={num_gpus}",

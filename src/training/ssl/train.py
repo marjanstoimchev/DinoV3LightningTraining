@@ -354,10 +354,18 @@ def main():
             logger.info(f"Using {args.dataset_type} dataset path: {cfg.train.dataset_path}")
 
     # Override batch size if provided (batch_size is TOTAL, divide by GPUs - same as MPP)
+    # Check for SLURM-based distribution
+    slurm_ntasks_for_batch = int(os.environ.get("SLURM_NTASKS", "1"))
+    slurm_launch_for_batch = os.environ.get("SLURM_LAUNCH", "")
     if args.batch_size:
-        per_gpu_batch_size = args.batch_size // args.gpus if args.gpus > 0 else args.batch_size
+        # Use SLURM task count if SLURM-based distribution, otherwise use args.gpus
+        if slurm_launch_for_batch and slurm_ntasks_for_batch > 1:
+            num_workers = slurm_ntasks_for_batch
+        else:
+            num_workers = args.gpus if args.gpus > 0 else 1
+        per_gpu_batch_size = args.batch_size // num_workers
         cfg.train.batch_size_per_gpu = per_gpu_batch_size
-        logger.info(f"Batch size: {args.batch_size} total -> {per_gpu_batch_size} per GPU ({args.gpus} GPUs)")
+        logger.info(f"Batch size: {args.batch_size} total -> {per_gpu_batch_size} per GPU ({num_workers} workers)")
 
     # Override compile setting if provided
     if args.compile:
@@ -410,15 +418,35 @@ def main():
         if args.sampler_type in ["distributed", "epoch"]:
             logger.info(f"Using {args.sampler_type} sampler - ignoring OFFICIAL_EPOCH_LENGTH, using actual dataset size")
 
+    # Detect SLURM-based distribution (srun with multiple tasks)
+    slurm_ntasks = int(os.environ.get("SLURM_NTASKS", "1"))
+    slurm_procid = os.environ.get("SLURM_PROCID")
+    slurm_launch = os.environ.get("SLURM_LAUNCH", "")
+
+    # Determine effective devices and strategy
+    effective_devices = args.gpus
+    effective_strategy = args.strategy
+    effective_num_nodes = args.num_nodes
+
+    if slurm_launch and slurm_ntasks > 1 and slurm_procid is not None:
+        # SLURM is handling distribution - each task gets 1 GPU
+        effective_devices = 1
+        effective_strategy = "ddp"
+        logger.info(f"SLURM distribution detected: task {slurm_procid}/{slurm_ntasks}")
+        logger.info(f"Using devices=1, strategy=ddp (SLURM handles multi-GPU)")
+    elif args.gpus > 1:
+        effective_strategy = "ddp" if args.strategy == "auto" else args.strategy
+        logger.info(f"Multi-GPU training: {args.gpus} GPUs, strategy={effective_strategy}")
+
     # Create trainer
     logger.info("Creating Lightning trainer...")
     trainer = pl.Trainer(
         max_epochs=cfg.optim.epochs,
         max_steps=max_steps if max_steps > 0 else -1,
         accelerator="auto",
-        devices=args.gpus,
-        num_nodes=args.num_nodes,
-        strategy=args.strategy,
+        devices=effective_devices,
+        num_nodes=effective_num_nodes,
+        strategy=effective_strategy,
         precision=args.precision,
         accumulate_grad_batches=args.accumulate_grad_batches,
         # Manual optimization handles gradient clipping internally
@@ -428,11 +456,11 @@ def main():
         log_every_n_steps=args.log_every_n_steps,
         limit_train_batches=args.limit_train_batches,
         fast_dev_run=args.fast_dev_run,
-        sync_batchnorm=True if args.gpus > 1 or args.num_nodes > 1 else False,
+        sync_batchnorm=True if slurm_ntasks > 1 or args.gpus > 1 or args.num_nodes > 1 else False,
         enable_checkpointing=True,
         enable_progress_bar=True,
         enable_model_summary=True,
-        deterministic=True,
+        deterministic=False,
         use_distributed_sampler=False,  # DINOv3 handles its own sampling
     )
 
