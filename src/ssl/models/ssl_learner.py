@@ -75,23 +75,33 @@ class SSLLearner(pl.LightningModule):
         # Distributed training setup will be handled in setup() method
         # when Lightning has initialized the distributed environment
 
-        # Initialize with NaN values (like original)
+        # Initialize with NaN values on CPU first - will be moved to CUDA in setup()
+        # This avoids CUDA initialization issues when torchrun spawns multiple processes
         self.ssl_model._apply(
             lambda t: torch.full_like(
                 t,
                 fill_value=math.nan if t.dtype.is_floating_point else (2 ** (t.dtype.itemsize * 8 - 1)),
-                device="cuda" if torch.cuda.is_available() else "cpu",
+                device="cpu",
             ),
             recurse=True,
         )
+        self._model_on_cpu = True  # Flag to track if we need to move to CUDA
 
-        logger.info(f"Model built: {self.ssl_model}")
+        logger.info(f"Model built on CPU (will move to CUDA in setup)")
 
     def setup(self, stage: str):
         """Setup model weights and schedules"""
         if stage == "fit":
             # Lightning handles distributed training automatically
             logger.info(f"Training setup (world_size: {self.trainer.world_size})")
+
+            # Move model to CUDA if it was initialized on CPU
+            # This is done after Lightning has set up the distributed environment
+            if getattr(self, '_model_on_cpu', False):
+                device = self.device  # Lightning provides the correct device
+                logger.info(f"Moving model from CPU to {device}")
+                self.ssl_model = self.ssl_model.to(device)
+                self._model_on_cpu = False
 
             # Initialize weights
             self.ssl_model.init_weights()
