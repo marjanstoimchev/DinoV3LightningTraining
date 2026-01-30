@@ -429,11 +429,11 @@ def main():
     effective_num_nodes = args.num_nodes
 
     if slurm_launch and slurm_ntasks > 1 and slurm_procid is not None:
-        # SLURM is handling distribution - each task gets 1 GPU
-        effective_devices = 1
+        # SLURM is handling distribution - devices must match ntasks-per-node
+        effective_devices = slurm_ntasks
         effective_strategy = "ddp"
         logger.info(f"SLURM distribution detected: task {slurm_procid}/{slurm_ntasks}")
-        logger.info(f"Using devices=1, strategy=ddp (SLURM handles multi-GPU)")
+        logger.info(f"Using devices={slurm_ntasks}, strategy=ddp (Lightning SLURM plugin)")
     elif args.gpus > 1:
         effective_strategy = "ddp" if args.strategy == "auto" else args.strategy
         logger.info(f"Multi-GPU training: {args.gpus} GPUs, strategy={effective_strategy}")

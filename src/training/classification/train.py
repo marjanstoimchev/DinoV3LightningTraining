@@ -280,11 +280,11 @@ def main():
     effective_strategy = args.strategy
 
     if slurm_launch and slurm_ntasks > 1 and slurm_procid is not None:
-        # SLURM is handling distribution - each task gets 1 GPU
-        effective_devices = 1
+        # SLURM is handling distribution - devices must match ntasks-per-node
+        effective_devices = slurm_ntasks
         effective_strategy = "ddp"
         print(f"SLURM distribution detected: task {slurm_procid}/{slurm_ntasks}")
-        print(f"Using devices=1, strategy=ddp (SLURM handles multi-GPU)")
+        print(f"Using devices={slurm_ntasks}, strategy=ddp (Lightning SLURM plugin)")
     elif args.gpus > 1:
         effective_strategy = "ddp" if args.strategy == "auto" else args.strategy
 
