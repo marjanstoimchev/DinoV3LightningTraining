@@ -38,26 +38,6 @@ cd "$SLURM_SUBMIT_DIR" || exit 1
 mkdir -p logs
 
 # =============================================================================
-# Load GCC for torch.compile/Triton (required for compilation inside container)
-# =============================================================================
-module load GCC 2>/dev/null || module load gcc 2>/dev/null || module load GCCcore 2>/dev/null || true
-if command -v gcc &> /dev/null; then
-    GCC_ROOT=$(dirname $(dirname $(which gcc)))
-    GCC_BIN="$GCC_ROOT/bin"
-    GCC_LIB="$GCC_ROOT/lib64"
-    echo "GCC loaded: $(gcc --version | head -1)"
-    echo "GCC root: $GCC_ROOT"
-    # Set full paths to CC/CXX for Triton compilation
-    export SINGULARITYENV_CC="$GCC_BIN/gcc"
-    export SINGULARITYENV_CXX="$GCC_BIN/g++"
-    # Add GCC lib path for runtime linking
-    export SINGULARITYENV_LD_LIBRARY_PATH="$GCC_LIB:${LD_LIBRARY_PATH:-}"
-else
-    echo "WARNING: GCC not found - torch.compile may not work"
-    GCC_ROOT=""
-fi
-
-# =============================================================================
 # Singularity container setup
 # =============================================================================
 SIF_IMAGE="${SIF_IMAGE:-$HOME/deeplearning.sif}"
@@ -109,7 +89,7 @@ BATCH_SIZE="${BATCH_SIZE:-128}"
 KOLEO_WEIGHT="${KOLEO_WEIGHT:-0.1}"
 OUTPUT_DIR="${OUTPUT_DIR:-prototype_analysis_dinov3}"
 PRECISION="${PRECISION:-bf16-mixed}"
-COMPILE="${COMPILE:-1}"  # Enable torch.compile by default for faster training
+COMPILE="${COMPILE:-}"  # Disabled by default (container lacks glibc-devel for Triton)
 
 # Continued pretraining support
 CONTINUED_PRETRAINING="${CONTINUED_PRETRAINING:-}"
@@ -211,27 +191,12 @@ SWEEP_ARGS=(
 SHM_DIR="/dev/shm/${USER}_${SLURM_JOB_ID}"
 mkdir -p "$SHM_DIR"
 
-# Build singularity bind mounts
-BIND_MOUNTS=(
-    --bind "$SLURM_SUBMIT_DIR":"$SLURM_SUBMIT_DIR"
-    --bind /tmp:/tmp
-    --bind "$HF_HOME":"$HF_HOME"
-    --bind "$TORCH_HOME":"$TORCH_HOME"
-    --bind "$SHM_DIR":/dev/shm
-)
-
-# Add GCC bind mount if available (for torch.compile/Triton)
-if [[ -n "$GCC_ROOT" && -d "$GCC_ROOT" ]]; then
-    BIND_MOUNTS+=(--bind "$GCC_ROOT":"$GCC_ROOT")
-    echo "Binding GCC from: $GCC_ROOT"
-    # Also bind lib64 if it exists separately
-    if [[ -d "$GCC_ROOT/lib64" ]]; then
-        echo "  Including lib64: $GCC_ROOT/lib64"
-    fi
-fi
-
 srun singularity exec --nv \
-    "${BIND_MOUNTS[@]}" \
+    --bind "$SLURM_SUBMIT_DIR":"$SLURM_SUBMIT_DIR" \
+    --bind /tmp:/tmp \
+    --bind "$HF_HOME":"$HF_HOME" \
+    --bind "$TORCH_HOME":"$TORCH_HOME" \
+    --bind "$SHM_DIR":/dev/shm \
     "$SIF_IMAGE" \
     ./scripts/prototype_analysis/run_sweep.sh "${SWEEP_ARGS[@]}"
 

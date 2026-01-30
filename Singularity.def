@@ -19,8 +19,11 @@ From: pytorch/pytorch:2.8.0-cuda12.8-cudnn9-runtime
 %post
     set -e
     apt-get update && apt-get install -y --no-install-recommends \
-        git graphviz && \
-        rm -rf /var/lib/apt/lists/*
+        git graphviz \
+        build-essential \
+        libc6-dev \
+        linux-libc-dev \
+        && rm -rf /var/lib/apt/lists/*
 
     pip install --no-cache-dir --upgrade pip wheel setuptools
 
