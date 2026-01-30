@@ -51,6 +51,35 @@
 # =============================================================================
 
 set -e  # Exit on error
+set -o pipefail  # Catch errors in pipelines
+
+# -----------------------------------------------------------------------------
+# Signal handling for graceful shutdown (SLURM sends SIGTERM before killing)
+# -----------------------------------------------------------------------------
+cleanup() {
+    local exit_code=$?
+    # Don't print cleanup message on successful exit
+    if [[ $exit_code -eq 0 ]]; then
+        return 0
+    fi
+    echo ""
+    log "=========================================="
+    log "JOB INTERRUPTED (exit code: $exit_code)"
+    log "=========================================="
+    if [[ -n "${DATASET:-}" ]]; then
+        log "Last working on: Dataset=${DATASET:-unknown}, Proto=${NUM_PROTO:-unknown}, Seed=${SEED:-unknown}"
+    fi
+    log "Checkpoints saved so far should be intact."
+    log "Rerun the same command to resume from last checkpoint."
+    echo ""
+    # Print memory info for debugging
+    if command -v nvidia-smi &> /dev/null; then
+        log "GPU memory at exit:"
+        nvidia-smi --query-gpu=memory.used,memory.total --format=csv 2>/dev/null || true
+    fi
+    exit $exit_code
+}
+trap cleanup SIGTERM SIGINT SIGHUP EXIT
 
 # -----------------------------------------------------------------------------
 # Usage
@@ -411,7 +440,12 @@ for DATASET in "${DATASET_ARRAY[@]}"; do
                     [[ -n "$GRAM_WEIGHT" ]] && PRETRAIN_CMD+=(--gram_weight "$GRAM_WEIGHT")
 
                     # Run with PRETRAIN_SEED
-                    CUDA_VISIBLE_DEVICES="$GPUS" PL_GLOBAL_SEED="$PRETRAIN_SEED" PYTHONPATH="$REPO_ROOT:$PYTHONPATH" "${PRETRAIN_CMD[@]}"
+                    if ! CUDA_VISIBLE_DEVICES="$GPUS" PL_GLOBAL_SEED="$PRETRAIN_SEED" PYTHONPATH="$REPO_ROOT:$PYTHONPATH" "${PRETRAIN_CMD[@]}"; then
+                        log "ERROR: [$DATASET] Pretraining command failed for proto_${NUM_PROTO}"
+                        log "       Check GPU memory, disk space, or config issues"
+                        # Exit with error - can't continue without pretraining
+                        exit 1
+                    fi
 
                     PRETRAIN_CKPT=$(find_checkpoint "$CKPT_DIR")
 
@@ -459,7 +493,12 @@ for DATASET in "${DATASET_ARRAY[@]}"; do
             [[ -n "$BATCH_SIZE" ]] && CLASSIFY_CMD+=(--batch_size "$BATCH_SIZE")
             [[ "$CLASSIFY_MODE" == "lineareval" ]] && CLASSIFY_CMD+=(--freeze_backbone)
 
-            CUDA_VISIBLE_DEVICES="$GPUS" PL_GLOBAL_SEED="$SEED" PYTHONPATH="$REPO_ROOT:$PYTHONPATH" "${CLASSIFY_CMD[@]}"
+            if ! CUDA_VISIBLE_DEVICES="$GPUS" PL_GLOBAL_SEED="$SEED" PYTHONPATH="$REPO_ROOT:$PYTHONPATH" "${CLASSIFY_CMD[@]}"; then
+                log "ERROR: [$DATASET] Classification command failed for proto_${NUM_PROTO} seed_${SEED}"
+                log "       Check GPU memory, disk space, or config issues"
+                # Continue to next configuration instead of failing entire sweep
+                continue
+            fi
 
             log "[$DATASET] Classification complete: proto_${NUM_PROTO} seed_${SEED}"
 
@@ -499,7 +538,7 @@ for DATASET in "${DATASET_ARRAY[@]}"; do
     log "[$DATASET] Aggregating results..."
     separator
 
-    PYTHONPATH="$REPO_ROOT:$PYTHONPATH" python scripts/prototype_analysis/sweep_classification.py \
+    if PYTHONPATH="$REPO_ROOT:$PYTHONPATH" python scripts/prototype_analysis/sweep_classification.py \
         --dataset "$DATASET" \
         --pretraining_dir "$OUTPUT_DIR/pretraining/$DATASET" \
         --prototypes ${PROTO_ARRAY[@]} \
@@ -508,9 +547,11 @@ for DATASET in "${DATASET_ARRAY[@]}"; do
         --gpus "$GPUS" \
         --output_dir "$OUTPUT_DIR" \
         --precision "$PRECISION" \
-        --skip_existing
-
-    log "[$DATASET] Results: $OUTPUT_DIR/$DATASET/"
+        --skip_existing; then
+        log "[$DATASET] Results: $OUTPUT_DIR/$DATASET/"
+    else
+        log "WARNING: [$DATASET] Aggregation failed (non-fatal, continuing...)"
+    fi
     echo ""
 done
 
