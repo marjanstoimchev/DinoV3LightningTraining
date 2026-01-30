@@ -4,8 +4,8 @@
 #SBATCH --output=logs/slurm-%j.out
 #SBATCH --error=logs/slurm-%j.err
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
-#SBATCH --cpus-per-task=10
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=20
 #SBATCH --gres=gpu:2
 #SBATCH --time=24:00:00
 #SBATCH --mem=32G
@@ -146,17 +146,9 @@ export MASTER_PORT=$((29500 + SLURM_JOB_ID % 1000))
 export SINGULARITYENV_MASTER_PORT="$MASTER_PORT"
 echo "Using MASTER_PORT: $MASTER_PORT"
 
-# --- SLURM-based distribution (don't use torchrun, let srun handle it) ---
-export SLURM_LAUNCH=1
-export SINGULARITYENV_SLURM_LAUNCH="$SLURM_LAUNCH"
-
-# --- Pass SLURM environment variables to container for DDP ---
-export SINGULARITYENV_SLURM_PROCID="$SLURM_PROCID"
-export SINGULARITYENV_SLURM_NTASKS="$SLURM_NTASKS"
-export SINGULARITYENV_SLURM_LOCALID="$SLURM_LOCALID"
-export SINGULARITYENV_SLURM_NODELIST="$SLURM_NODELIST"
-export SINGULARITYENV_SLURM_JOB_NODELIST="$SLURM_JOB_NODELIST"
-export SINGULARITYENV_SLURM_JOB_NUM_NODES="$SLURM_JOB_NUM_NODES"
+# --- Multi-GPU via torchrun (single SLURM task, torchrun spawns processes) ---
+# With --ntasks-per-node=1, we let torchrun handle multi-GPU process spawning
+# This avoids conflicts between SLURM and Lightning's distributed launchers
 
 # Build command arguments
 SWEEP_ARGS=(
